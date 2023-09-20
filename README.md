@@ -2,7 +2,7 @@
 
 Work in progress
 
-# LoadBatch
+## LoadBatch
 
 Contains a lot of useful functions that I use to load a `.root` file into Python and to analyze its content
 
