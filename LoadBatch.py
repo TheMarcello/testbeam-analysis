@@ -242,5 +242,54 @@ def read_sensors(sensor_file):
     return sensor_list
 
 
+def plot(df, plot_type, batch, sensors, *,
+         bins=(200,200), n_DUT=3, savefig=False, savefig_path='../various plots', savefig_details='',
+         **kwrd_arg):
+    """
+    Function to produce the plots \n
+    Parameters
+    ----------
+    df:             dataframe of the data to plot
+    plot_type:      type of plot, options are:
+                        '2D_Tracks':    2D plot of the reconstructed tracks
+                        '1D_Tracks':    histogram of reconstructed tracks distribution (Xtr and Ytr)
+    batch:          batch number
+    sensors:        dictionary of the sensors in this batch
+    bins:           binning options, (int,int) or (bin_edges_list, bin_edges_list)
+    n_DUT:          number of devices under test (3 for each Scope for May 2023)
+    savefig:        boolean option to save the plot
+    savefig_path:   folder where to save the plot
+    savefig_details: optional details for the file (e.g. distinguish cuts)
+    """
+    match plot_type:        
+        case "2D_Tracks":        # 2D tracks plots
+            fig, axes = plt.subplots(nrows=1, ncols=n_DUT, figsize=(15,6), sharex='all', sharey='all', dpi=200)
+            fig.tight_layout(w_pad=6, h_pad=4)
+            for i in range(n_DUT):
+                hist, _, _, _, = axes[i].hist2d(df[f"Xtr_{i}"], df[f"Ytr_{i}"], bins=bins, **kwrd_arg)
+                if sensors: axes[i].set_title(f"Ch{i+2}\n({sensors['Ch'+f'{i+2}']})")
+                else: axes[i].set_title(f"Ch{i+2}")
+                axes[i].set_aspect('equal')
+                axes[i].set_xlabel('pixels', fontsize=20)
+                axes[i].set_ylabel('pixels', fontsize=20)
+                
+        case "1D_Tracks":        # 1D tracks plots
+            fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(15,5), dpi=200, sharex='all', sharey='all')
+            for i in range(n_DUT):
+                add_histogram(axes[0], df[f"Xtr_{i}"], label=f"Xtr_{i}", **kwrd_arg)
+                add_histogram(axes[1], df[f"Ytr_{i}"], label=f"Ytr_{i}", **kwrd_arg)
+                axes[0].legend(fontsize=16)
+                axes[1].legend(fontsize=16)
+                
+    fig.suptitle(f"{plot_type}, batch: {batch}", fontsize=24, y=1.1)
+
+    # Efficiency plot
+
+    # Efficiency Xtr Ytr
+
+    if savefig: fig.savefig(f"{savefig_path}/{plot_type}_{batch}{savefig_details}.jpg")
+
+
+
 # if __name__ == '__main__':
 #     main()
