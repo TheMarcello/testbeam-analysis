@@ -30,7 +30,8 @@ into 'Branch_0', 'Branch_1' etc. \n
     -------
     df:         pandas DataFrame containing the branches (unpacked into multiple columns)
     """
-    tree = uproot.open(file_path+":tree")
+    try:    tree = uproot.open(file_path+":tree")
+    except: raise FileNotFoundError(f"no file named: {file_path}")  # raise error if file not found
     df_ak = tree.arrays(branches, library='ak') # changed library from pd (pandas) to ak (awkward)
     df = pd.DataFrame()  # empty dataframe
 
@@ -87,7 +88,8 @@ def add_histogram(ax, data, bins='auto',  **kwrd_arg):
     ax.hist(data, bins=bins, histtype='step',  **kwrd_arg)
 
 
-def find_min_btw_peaks(data, bins, prominence, distance, plot=True):
+def find_min_btw_peaks(data, bins, prominence=None, plot=True,
+                       savefig=False, savefig_path='../various plots/', savefig_details=''):
     """
     Finds the minimun between two peaks, using 'find_peaks()' function. \n
     Parameters
@@ -95,51 +97,62 @@ def find_min_btw_peaks(data, bins, prominence, distance, plot=True):
     data:       data to be transformed into histogram and of which to find the peaks
     bins:       matplot bins options e.g. int (number of bins), list (bin edges)
     prominence: "height" of the peak compared to neighbouring data
-    distance:   min distance between peaks
-    plot:       boolean, default False, if the plot will to be shown
+    plot:       boolean, default True, if the plot will to be shown
 
     Returns
     -------
     x_min:      x position of the minimum
     """
-    hist, bins_hist, _ = plt.hist(data, bins=bins, histtype='step')
+    fig, ax = plt.subplots(figsize=(15,10), dpi=200)
+    ax.semilogy()
+    hist, bins_hist, _ = ax.hist(data, bins=bins, histtype='step')
     bins_centers = (bins_hist[1:]+bins_hist[:-1])/2
-    peaks_idx, _ = find_peaks(hist, prominence=prominence, distance=distance)
-    plt.plot(bins_centers[peaks_idx], hist[peaks_idx], 'x', markersize=10, color='k', label='Peaks')
-    try:
-        global_min, _ = find_peaks(-hist[peaks_idx[0]:peaks_idx[-1]], prominence=prominence, distance=distance)
+    
+    kernel_size = int(np.max(data)/5)  # kernel: 20% of full range of values
+    smoothed_hist = np.convolve(hist, np.ones(kernel_size)/kernel_size, mode='same')
+    if not prominence: prominence = np.max(smoothed_hist)/100
+    # find (hopefully two) peaks and plot them
+    peaks_idx, info_peaks = find_peaks(smoothed_hist, prominence=prominence)
+    ax.plot(bins_centers, smoothed_hist, linewidth=1, label='Smoothed hist')
+    ax.plot(bins_centers[peaks_idx], smoothed_hist[peaks_idx], 'x', markersize=10, color='k', label='Peaks')
+    try:    local_min, info_min = find_peaks(-smoothed_hist[peaks_idx[0]:peaks_idx[-1]], prominence=prominence)
     except:
-        print("Didn't find 2 peaks")
+        print(f"Two peaks not found, found instead: {info_peaks}")
         return
-    try: x_min = bins_centers[global_min+peaks_idx[0]][0]
-    except:
-        print("No x_min found")
-        return
-    plt.plot(x_min, hist[global_min+peaks_idx[0]][0], 'o', markersize=10, color='b', label='Mimimum: %.1f'%x_min)
+    if len(local_min)==0: raise Exception("No minimum found")
+    elif len(local_min)>1:
+        print(f"More than one minimum found at: {[bins_centers[min_idx+peaks_idx[0]] for min_idx in local_min]}")
+#         return local_min, info_min
+    # find the minimum git 
+    x_min = bins_centers[local_min[0]+peaks_idx[0]]
+    ax.plot(x_min, smoothed_hist[local_min[0]+peaks_idx[0]], 'o', markersize=10, color='r',
+            label='Mimimum: %.1f'%x_min, alpha=.7)
+    ax.legend(fontsize=16)
+    if savefig: fig.savefig(f"{savefig_path}find_min_btw_peaks{savefig_details}.jpg")
     if not plot: plt.close()
-#     y_min = hist[global_min+peaks_idx[0]][0]
-    return  x_min#, y_min
+    return  x_min
 
 
-def find_min_kde(data, x_axis):
-    """
-    Finds the minimum between two peaks, using a normal kernel distribution 'scipy.stats.gaussian_kde()' \n
-    Parameters
-    ----------
-    data:       data to find the minimum
-    x_axis:     array, x_axis to evaluate the gaussian_kde
 
-    Returns
-    -------
-    minimum:    x position of the minimum (evaluated on the x_axis)
-    """
-    kde = gaussian_kde(dataset=data.to_numpy()).evaluate(x_axis)
-    peaks = find_peaks(kde)[0]
-    try: minimun = find_peaks(-kde[peaks[0]:peaks[1]])
-    except: 
-        print("Didn't find 2 peaks")
-        return
-    return x_axis[minimun[0]+peaks[0]]
+# def find_min_kde(data, x_axis):
+#     """
+#     Finds the minimum between two peaks, using a normal kernel distribution 'scipy.stats.gaussian_kde()' \n
+#     Parameters
+#     ----------
+#     data:       data to find the minimum
+#     x_axis:     array, x_axis to evaluate the gaussian_kde
+
+#     Returns
+#     -------
+#     minimum:    x position of the minimum (evaluated on the x_axis)
+#     """
+#     kde = gaussian_kde(dataset=data.to_numpy()).evaluate(x_axis)
+#     peaks = find_peaks(kde)[0]
+#     try: minimun = find_peaks(-kde[peaks[0]:peaks[1]])
+#     except: 
+#         print("Didn't find 2 peaks")
+#         return
+#     return x_axis[minimun[0]+peaks[0]]
 
 
 def find_edges(data, bins='auto', plot=False):
@@ -226,24 +239,25 @@ def efficiency_k_n(k,n):
     return (eff, var**(1/2))
 
 
-def read_sensors(sensor_file):
+def read_pickle(file):
     """
     Read the '.pickle' file containing all the list of sensors for each batch, oscilloscope, channel
     
     Parameters
     ----------
-    sensor_file:    file path to the .pickle containing the list of sensors
+    sensor_file:    file path to the .pickle c
 
     Returns
+    pickle_dict:    (usually dict) contained in the pickle file
     -------
     """
-    with open(sensor_file, 'rb') as f:
-        sensor_list = pickle.load(f)
-    return sensor_list
+    with open(file, 'rb') as f:
+        pickle_dict = pickle.load(f)
+    return pickle_dict
 
 
 def plot(df, plot_type, batch, sensors, *,
-         bins=(200,200), n_DUT=3, savefig=False, savefig_path='../various plots', savefig_details='',
+         bins=200, n_DUT=3, savefig=False, savefig_path='../various plots', savefig_details='',
          **kwrd_arg):
     """
     Function to produce the plots \n
@@ -253,13 +267,18 @@ def plot(df, plot_type, batch, sensors, *,
     plot_type:      type of plot, options are:
                         '2D_Tracks':    2D plot of the reconstructed tracks
                         '1D_Tracks':    histogram of reconstructed tracks distribution (Xtr and Ytr)
+                        'pulseHeight':  histogram of the pulseHeight of all channels (log scale)
     batch:          batch number
     sensors:        dictionary of the sensors in this batch
-    bins:           binning options, (int,int) or (bin_edges_list, bin_edges_list)
+    bins:           binning options, (int,int) or (bin_edges_list, bin_edges_list), can be different for different plot_type
     n_DUT:          number of devices under test (3 for each Scope for May 2023)
     savefig:        boolean option to save the plot
     savefig_path:   folder where to save the plot
     savefig_details: optional details for the file (e.g. distinguish cuts)
+    
+    Returns
+    -------
+    fig, ax:        figure and axis objects so that more manipulation can be done
     """
     match plot_type:        
         case "2D_Tracks":        # 2D tracks plots
@@ -267,27 +286,44 @@ def plot(df, plot_type, batch, sensors, *,
             fig.tight_layout(w_pad=6, h_pad=4)
             for i in range(n_DUT):
                 hist, _, _, _, = axes[i].hist2d(df[f"Xtr_{i}"], df[f"Ytr_{i}"], bins=bins, **kwrd_arg)
-                if sensors: axes[i].set_title(f"Ch{i+2}\n({sensors['Ch'+f'{i+2}']})")
+                if sensors: axes[i].set_title(f"Ch{i+2}\n({sensors[f'Ch{i+2}']})")
                 else: axes[i].set_title(f"Ch{i+2}")
                 axes[i].set_aspect('equal')
                 axes[i].set_xlabel('pixels', fontsize=20)
                 axes[i].set_ylabel('pixels', fontsize=20)
                 
         case "1D_Tracks":        # 1D tracks plots
-            fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(15,5), dpi=200, sharex='all', sharey='all')
+            fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(15,5), dpi=200, sharey='all')
             for i in range(n_DUT):
-                add_histogram(axes[0], df[f"Xtr_{i}"], label=f"Xtr_{i}", **kwrd_arg)
-                add_histogram(axes[1], df[f"Ytr_{i}"], label=f"Ytr_{i}", **kwrd_arg)
-                axes[0].legend(fontsize=16)
-                axes[1].legend(fontsize=16)
+                add_histogram(axes[0], df[f"Xtr_{i}"], label=f"Xtr_{i}", bins=bins[0], **kwrd_arg)
+                add_histogram(axes[1], df[f"Ytr_{i}"], label=f"Ytr_{i}", bins=bins[1], **kwrd_arg)
+            axes[0].legend(fontsize=16)
+            axes[1].legend(fontsize=16)
+        
+        case "pulseHeight":       # PulseHeight plot
+            fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(15,10), dpi=200)
                 
-    fig.suptitle(f"{plot_type}, batch: {batch}", fontsize=24, y=1.1)
+            for i in range(n_DUT+1):
+                add_histogram(axes, df[f"pulseHeight_{i}"], bins=bins, label=f"sensor: {sensors[f'Ch{i+1}']}", alpha=.8)
+            axes.semilogy()
+            axes.set_xlabel("PulseHeight [mV]", fontsize=20)
+            axes.set_ylabel("Events (log)", fontsize=20)
+            axes.set_title(f"PulseHeight (no cut), batch {batch}, bins {bins}", fontsize=24, y=1.05)
+            axes.set_xlim(left=-10)
+            axes.legend(fontsize=20)
+                    
+        case other:
+            print("No plot_type found, options are: \n '2D_Tracks', '1D_Tracks', 'pulseHeight'")
+            return
+        
+    fig.suptitle(f"{plot_type}, batch: {batch} {savefig_details}", fontsize=24, y=1.1)
+
+    if savefig: fig.savefig(f"{savefig_path}/{plot_type}_{batch}{savefig_details}.jpg", bbox_inches="tight")
+    return fig, axes
 
     # Efficiency plot
 
     # Efficiency Xtr Ytr
-
-    if savefig: fig.savefig(f"{savefig_path}/{plot_type}_{batch}{savefig_details}.jpg")
 
 
 
