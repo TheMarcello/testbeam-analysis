@@ -88,20 +88,21 @@ def add_histogram(ax, data, bins='auto',  **kwrd_arg):
     ax.hist(data, bins=bins, histtype='step',  **kwrd_arg)
 
 
-def find_min_btw_peaks(data, bins, prominence=None, plot=True,
-                       savefig=False, savefig_path='../various plots/', savefig_details=''):
+def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, plot=True,
+                       savefig=False, savefig_path='../various plots/', savefig_details='', rec_depth=0):
     """
     Finds the minimun between two peaks, using 'find_peaks()' function. \n
     Parameters
     ----------
-    data:       data to be transformed into histogram and of which to find the peaks
-    bins:       matplot bins options e.g. int (number of bins), list (bin edges)
-    prominence: "height" of the peak compared to neighbouring data
-    plot:       boolean, default True, if the plot will to be shown
-
+    data:           data to be transformed into histogram and of which to find the peaks
+    bins:           matplot bins options e.g. int (number of bins), list (bin edges)
+    peak_prominence: "height" of the peaks compared to neighbouring data
+    min_prominence:  "depth" of the min compared to neighbouring data
+    plot:           boolean, default True, if the plot will to be shown
+    rec_depth:      IGNORE, only used to recursively find peaks and min
     Returns
     -------
-    x_min:      x position of the minimum
+    x_min:          x position of the minimum
     """
     fig, ax = plt.subplots(figsize=(15,10), dpi=200)
     ax.semilogy()
@@ -110,20 +111,38 @@ def find_min_btw_peaks(data, bins, prominence=None, plot=True,
     
     kernel_size = int(np.max(data)/5)  # kernel: 20% of full range of values
     smoothed_hist = np.convolve(hist, np.ones(kernel_size)/kernel_size, mode='same')
-    if not prominence: prominence = np.max(smoothed_hist)/100
+    if not peak_prominence: peak_prominence = np.max(smoothed_hist)/100
+    if not min_prominence: min_prominence = np.max(smoothed_hist)/100
     # find (hopefully two) peaks and plot them
-    peaks_idx, info_peaks = find_peaks(smoothed_hist, prominence=prominence)
+    peaks_idx, info_peaks = find_peaks(smoothed_hist, prominence=peak_prominence)
     ax.plot(bins_centers, smoothed_hist, linewidth=1, label='Smoothed hist')
     ax.plot(bins_centers[peaks_idx], smoothed_hist[peaks_idx], 'x', markersize=10, color='k', label='Peaks')
-    try:    local_min, info_min = find_peaks(-smoothed_hist[peaks_idx[0]:peaks_idx[-1]], prominence=prominence)
-    except:
-        print(f"Two peaks not found, found instead: {info_peaks}")
-        return
-    if len(local_min)==0: raise Exception("No minimum found")
+    
+    try:       # find the minimum 
+        local_min, info_min = find_peaks(-smoothed_hist[peaks_idx[0]:peaks_idx[1]], prominence=min_prominence)
+    except:    # if it doesn't work it's because only one peak was found
+        print(f"Two peaks not found, found instead: {info_peaks}, retrying...")
+        if rec_depth<10:
+            plt.close()
+            peak_prominence *= 0.8    # reduce prominence if the peaks are not found
+            return find_min_btw_peaks(data, bins, peak_prominence=peak_prominence, min_prominence=min_prominence, plot=plot, # recursion
+                       savefig=savefig, savefig_path=savefig_path, savefig_details=savefig_details, rec_depth=rec_depth+1)
+        else:
+            print(f"Still no peaks after {rec_depth} iterations")
+            return
+    if len(local_min)==0:
+        print(f"No minimum found, retrying...")
+        if rec_depth<10:
+            plt.close()
+            min_prominence *= 0.8     # reduce prominence if the min is not found
+            return find_min_btw_peaks(data, bins, peak_prominence=peak_prominence, min_prominence=min_prominence, plot=plot, # recursion
+                       savefig=savefig, savefig_path=savefig_path, savefig_details=savefig_details, rec_depth=rec_depth+1)
+        else:
+            print(f"Still no min after {rec_depth} iterations")
+            return
     elif len(local_min)>1:
         print(f"More than one minimum found at: {[bins_centers[min_idx+peaks_idx[0]] for min_idx in local_min]}")
-#         return local_min, info_min
-    # find the minimum git 
+
     x_min = bins_centers[local_min[0]+peaks_idx[0]]
     ax.plot(x_min, smoothed_hist[local_min[0]+peaks_idx[0]], 'o', markersize=10, color='r',
             label='Mimimum: %.1f'%x_min, alpha=.7)
