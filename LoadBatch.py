@@ -1,20 +1,20 @@
 import numpy as np # NumPy
 import matplotlib.pylab as plt # Matplotlib plots
-import matplotlib.patches as mpatches
+# import matplotlib.patches as mpatches
 import pandas as pd # Pandas
 import uproot
 import pickle
 
-import awkward as ak
-import mplhep as hep
+# import awkward as ak
+# import mplhep as hep
 # import argparse     # to get arguments from command line executing file.py
 import os # read directories etc.
 from scipy.signal import find_peaks, gaussian
-from scipy.optimize import curve_fit
+# from scipy.optimize import curve_fit
 from scipy.stats import gaussian_kde
-import pylandau
-import re
-import copy
+# import pylandau
+# import re
+# import copy
 
 
 def root_to_df(file_path, branches):
@@ -69,9 +69,9 @@ def plot_histogram(data, poisson_err=False, bins='auto', **kwrd_arg):
         bins_centers = (bins_points[1:]+bins_points[:-1])/2
         if (np.shape(np.shape(data))[0]>1): # a bit convoluted but checks the dimensions of the data
             for single_hist in hist_points:     # in case data is a list of data
-                ax.errorbar(bins_centers, single_hist, yerr=single_hist**0.5, elinewidth=2, marker='.', linewidth=0, alpha=0.7)
+                ax.errorbar(bins_centers, single_hist, yerr=single_hist**0.5, elinewidth=2, marker='.', linewidth=0, alpha=0.7, **kwrd_arg)
         else:
-            ax.errorbar(bins_centers, hist_points, yerr=hist_points**0.5, elinewidth=2, marker='.', linewidth=0, alpha=0.7)
+            ax.errorbar(bins_centers, hist_points, yerr=hist_points**0.5, elinewidth=2, marker='.', linewidth=0, alpha=0.7, **kwrd_arg)
     return fig, ax
 
 
@@ -89,28 +89,36 @@ def add_histogram(ax, data, bins='auto',  **kwrd_arg):
 
 
 def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, plot=True,
-                       savefig=False, savefig_path='../various plots/', savefig_details='', rec_depth=0):
+                       savefig=False, savefig_path='../various plots/', savefig_details='', fig_ax=None, rec_depth=0):
     """
     Finds the minimun between two peaks, using 'find_peaks()' function. \n
     Parameters
     ----------
-    data:           data to be transformed into histogram and of which to find the peaks
+    data:           data to be transformed into histogram and of which to find the peaks (e.g. df['pulseHeight_1'])
     bins:           matplot bins options e.g. int (number of bins), list (bin edges)
     peak_prominence: "height" of the peaks compared to neighbouring data
     min_prominence:  "depth" of the min compared to neighbouring data
     plot:           boolean, default True, if the plot will to be shown
+    fig_ax:         optionally pass the 'figure' and 'axis' objects to plot onto
     rec_depth:      IGNORE, only used to recursively find peaks and min
     Returns
     -------
     x_min:          x position of the minimum
     """
-    fig, ax = plt.subplots(figsize=(15,10), dpi=200)
+    if fig_ax:
+        fig, ax = fig_ax
+    else:
+        fig, ax = plt.subplots(figsize=(15,10), dpi=200)
     ax.semilogy()
-    hist, bins_hist, _ = ax.hist(data, bins=bins, histtype='step')
+    hist, bins_hist, _ = ax.hist(data, bins=bins, histtype='step', density=True)
     bins_centers = (bins_hist[1:]+bins_hist[:-1])/2
-    
-    kernel_size = int(np.max(data)/5)  # kernel: 20% of full range of values
-    smoothed_hist = np.convolve(hist, np.ones(kernel_size)/kernel_size, mode='same')
+#     kernel_size = int(np.max(data)/5)  # kernel: 20% of full range of values
+#     smoothed_hist = np.convolve(hist, np.ones(kernel_size)/kernel_size, mode='same')
+    # Use kernel density estimate instead
+    kde = gaussian_kde(data)
+    print("evaluating kde:")
+    smoothed_hist = kde.evaluate(bins_centers)
+    print("Done!")
     if not peak_prominence: peak_prominence = np.max(smoothed_hist)/100
     if not min_prominence: min_prominence = np.max(smoothed_hist)/100
     # find (hopefully two) peaks and plot them
@@ -121,25 +129,25 @@ def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, pl
     try:       # find the minimum 
         local_min, info_min = find_peaks(-smoothed_hist[peaks_idx[0]:peaks_idx[1]], prominence=min_prominence)
     except:    # if it doesn't work it's because only one peak was found
-        print(f"Two peaks not found, found instead: {info_peaks}, retrying...")
+        print(f"Two peaks not found, retrying...")
         if rec_depth<10:
-            plt.close()
-            peak_prominence *= 0.8    # reduce prominence if the peaks are not found
+            ax.clear()
+            peak_prominence *= 0.7    # reduce prominence if the peaks are not found
             return find_min_btw_peaks(data, bins, peak_prominence=peak_prominence, min_prominence=min_prominence, plot=plot, # recursion
-                       savefig=savefig, savefig_path=savefig_path, savefig_details=savefig_details, rec_depth=rec_depth+1)
+                       savefig=savefig, savefig_path=savefig_path, savefig_details=savefig_details, fig_ax=fig_ax, rec_depth=rec_depth+1)
         else:
             print(f"Still no peaks after {rec_depth} iterations")
-            return
+            return None
     if len(local_min)==0:
         print(f"No minimum found, retrying...")
-        if rec_depth<10:
-            plt.close()
-            min_prominence *= 0.8     # reduce prominence if the min is not found
+        if rec_depth<20:
+            ax.clear()
+            min_prominence *= 0.7     # reduce prominence if the min is not found
             return find_min_btw_peaks(data, bins, peak_prominence=peak_prominence, min_prominence=min_prominence, plot=plot, # recursion
-                       savefig=savefig, savefig_path=savefig_path, savefig_details=savefig_details, rec_depth=rec_depth+1)
+                       savefig=savefig, savefig_path=savefig_path, savefig_details=savefig_details, fig_ax=fig_ax, rec_depth=rec_depth+1)
         else:
             print(f"Still no min after {rec_depth} iterations")
-            return
+            return None
     elif len(local_min)>1:
         print(f"More than one minimum found at: {[bins_centers[min_idx+peaks_idx[0]] for min_idx in local_min]}")
 
@@ -149,29 +157,8 @@ def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, pl
     ax.legend(fontsize=16)
     if savefig: fig.savefig(f"{savefig_path}find_min_btw_peaks{savefig_details}.jpg")
     if not plot: plt.close()
-    return  x_min
 
-
-
-# def find_min_kde(data, x_axis):
-#     """
-#     Finds the minimum between two peaks, using a normal kernel distribution 'scipy.stats.gaussian_kde()' \n
-#     Parameters
-#     ----------
-#     data:       data to find the minimum
-#     x_axis:     array, x_axis to evaluate the gaussian_kde
-
-#     Returns
-#     -------
-#     minimum:    x position of the minimum (evaluated on the x_axis)
-#     """
-#     kde = gaussian_kde(dataset=data.to_numpy()).evaluate(x_axis)
-#     peaks = find_peaks(kde)[0]
-#     try: minimun = find_peaks(-kde[peaks[0]:peaks[1]])
-#     except: 
-#         print("Didn't find 2 peaks")
-#         return
-#     return x_axis[minimun[0]+peaks[0]]
+    return  x_min 
 
 
 def find_edges(data, bins='auto', plot=False):
@@ -282,7 +269,7 @@ def plot(df, plot_type, batch, *, sensors=None, bins=200, n_DUT=3,
     Function to produce the plots \n
     Parameters
     ----------
-    df:             dataframe of the data to plot
+    df:             FULL dataframe of the data to plot (each plot_type select the data it needs)
     plot_type:      type of plot, options are:
                         '2D_Tracks':    2D plot of the reconstructed tracks
                         '1D_Tracks':    histogram of reconstructed tracks distribution (Xtr and Ytr)
@@ -313,7 +300,7 @@ def plot(df, plot_type, batch, *, sensors=None, bins=200, n_DUT=3,
                 axes[i].set_ylabel('pixels', fontsize=20)
                 
         case "1D_Tracks":        # 1D tracks plots
-            fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(15,5), dpi=200, sharey='all')
+            fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(15,6), dpi=200, sharey='all')
             for i in range(n_DUT):
                 add_histogram(axes[0], df[f"Xtr_{i}"], label=f"Xtr_{i}", bins=bins[0], **kwrd_arg)
                 add_histogram(axes[1], df[f"Ytr_{i}"], label=f"Ytr_{i}", bins=bins[1], **kwrd_arg)
@@ -335,25 +322,29 @@ def plot(df, plot_type, batch, *, sensors=None, bins=200, n_DUT=3,
             axes.grid('--')
             
         case "2D_Sensors":        # 2D tracks plots filtering some noise out (pulseHeight cut)
-            fig, axes = plt.subplots(nrows=1, ncols=n_DUT, figsize=(15,6), sharex='all', sharey='all', dpi=200)
-            mins = [find_min_btw_peaks(df[f"pulseHeight_{i}"], bins='auto', plot=False) for i in range(1,n_DUT+1)]
+            fig, axes = plt.subplots(nrows=2, ncols=n_DUT, figsize=(20,12), sharex=False, sharey=False, dpi=200)
             fig.tight_layout(w_pad=6, h_pad=4)
             for i in range(n_DUT):
-                pulseHeight_filter = np.where(df[f"pulseHeight_{i+1}"]>mins[i])
-                hist, _, _, _, = axes[i].hist2d(df[f"Xtr_{i}"].iloc[pulseHeight_filter], df[f"Ytr_{i}"].iloc[pulseHeight_filter],
+                minimum = find_min_btw_peaks(df[f"pulseHeight_{i+1}"], bins='auto', plot=True, fig_ax=(fig,axes[0,i]),
+                                             savefig=True, savefig_details=f"_{batch}_DUT{i}"+savefig_details)
+                if not minimum:    # if minimum is None or some other invalid value
+                    print("No minimum, no plot")
+                    continue
+                pulseHeight_filter = np.where(df[f"pulseHeight_{i+1}"]>minimum)
+                hist, _, _, _, = axes[1,i].hist2d(df[f"Xtr_{i}"].iloc[pulseHeight_filter], df[f"Ytr_{i}"].iloc[pulseHeight_filter],
                                                 bins=bins, **kwrd_arg)
-                if sensors: axes[i].set_title(f"Ch{i+2}, "+"cut: %.1f"%mins[i]+f"mV \n({sensors[f'Ch{i+2}']})")
-                else: axes[i].set_title(f"Ch{i+2}")
-                axes[i].set_aspect('equal')
-                axes[i].set_xlabel('pixels', fontsize=20)
-                axes[i].set_ylabel('pixels', fontsize=20)
+                if sensors: axes[1,i].set_title(f"Ch{i+2}, "+"cut: %.1f"%minimum+f"mV \n({sensors[f'Ch{i+2}']})")
+                else: axes[1,i].set_title(f"Ch{i+2}")
+                axes[1,i].set_aspect('equal')
+                axes[1,i].set_xlabel('pixels', fontsize=20)
+                axes[1,i].set_ylabel('pixels', fontsize=20)
                     
         case other:
             print("""No plot_type found, options are:
             '2D_Tracks', '1D_Tracks', 'pulseHeight', '2D_Sensors' """)
             return
         
-    fig.suptitle(f"{plot_type}, batch: {batch} {savefig_details}", fontsize=24, y=1.1)
+    fig.suptitle(f"{plot_type}, batch: {batch} {savefig_details}", fontsize=24, y=1.15)
 
     if savefig: fig.savefig(f"{savefig_path}/{plot_type}_{batch}{savefig_details}.jpg", bbox_inches="tight")
     return fig, axes
@@ -361,7 +352,6 @@ def plot(df, plot_type, batch, *, sensors=None, bins=200, n_DUT=3,
     # Efficiency plot
 
     # Efficiency Xtr Ytr
-
 
 
 # if __name__ == '__main__':
