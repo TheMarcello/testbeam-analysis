@@ -275,8 +275,8 @@ def read_pickle(file):
     return pickle_dict
 
 
-def plot(df, plot_type, batch, sensors, *,
-         bins=200, n_DUT=3, savefig=False, savefig_path='../various plots', savefig_details='',
+def plot(df, plot_type, batch, *, sensors=None, bins=200, n_DUT=3,
+         savefig=False, savefig_path='../various plots', savefig_details='',
          **kwrd_arg):
     """
     Function to produce the plots \n
@@ -287,13 +287,14 @@ def plot(df, plot_type, batch, sensors, *,
                         '2D_Tracks':    2D plot of the reconstructed tracks
                         '1D_Tracks':    histogram of reconstructed tracks distribution (Xtr and Ytr)
                         'pulseHeight':  histogram of the pulseHeight of all channels (log scale)
+                        '2D_Sensors':   2D plot of tracks with pulseHeight cut (highlighting the sensors)
     batch:          batch number
     sensors:        dictionary of the sensors in this batch
     bins:           binning options, (int,int) or (bin_edges_list, bin_edges_list), can be different for different plot_type
     n_DUT:          number of devices under test (3 for each Scope for May 2023)
     savefig:        boolean option to save the plot
     savefig_path:   folder where to save the plot
-    savefig_details: optional details for the file (e.g. distinguish cuts)
+    savefig_details: optional details for the file name (e.g. distinguish cuts)
     
     Returns
     -------
@@ -318,10 +319,11 @@ def plot(df, plot_type, batch, sensors, *,
                 add_histogram(axes[1], df[f"Ytr_{i}"], label=f"Ytr_{i}", bins=bins[1], **kwrd_arg)
             axes[0].legend(fontsize=16)
             axes[1].legend(fontsize=16)
+            axes[0].grid('--')
+            axes[1].grid('--')
         
         case "pulseHeight":       # PulseHeight plot
             fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(15,10), dpi=200)
-                
             for i in range(n_DUT+1):
                 add_histogram(axes, df[f"pulseHeight_{i}"], bins=bins, label=f"sensor: {sensors[f'Ch{i+1}']}", alpha=.8)
             axes.semilogy()
@@ -330,9 +332,25 @@ def plot(df, plot_type, batch, sensors, *,
             axes.set_title(f"PulseHeight (no cut), batch {batch}, bins {bins}", fontsize=24, y=1.05)
             axes.set_xlim(left=-10)
             axes.legend(fontsize=20)
+            axes.grid('--')
+            
+        case "2D_Sensors":        # 2D tracks plots filtering some noise out (pulseHeight cut)
+            fig, axes = plt.subplots(nrows=1, ncols=n_DUT, figsize=(15,6), sharex='all', sharey='all', dpi=200)
+            mins = [find_min_btw_peaks(df[f"pulseHeight_{i}"], bins='auto', plot=False) for i in range(1,n_DUT+1)]
+            fig.tight_layout(w_pad=6, h_pad=4)
+            for i in range(n_DUT):
+                pulseHeight_filter = np.where(df[f"pulseHeight_{i+1}"]>mins[i])
+                hist, _, _, _, = axes[i].hist2d(df[f"Xtr_{i}"].iloc[pulseHeight_filter], df[f"Ytr_{i}"].iloc[pulseHeight_filter],
+                                                bins=bins, **kwrd_arg)
+                if sensors: axes[i].set_title(f"Ch{i+2}, "+"cut: %.1f"%mins[i]+f"mV \n({sensors[f'Ch{i+2}']})")
+                else: axes[i].set_title(f"Ch{i+2}")
+                axes[i].set_aspect('equal')
+                axes[i].set_xlabel('pixels', fontsize=20)
+                axes[i].set_ylabel('pixels', fontsize=20)
                     
         case other:
-            print("No plot_type found, options are: \n '2D_Tracks', '1D_Tracks', 'pulseHeight'")
+            print("""No plot_type found, options are:
+            '2D_Tracks', '1D_Tracks', 'pulseHeight', '2D_Sensors' """)
             return
         
     fig.suptitle(f"{plot_type}, batch: {batch} {savefig_details}", fontsize=24, y=1.1)
