@@ -364,6 +364,8 @@ def plot(df, plot_type, batch, *, sensors=None, bins=200, n_DUT=3,
                                                 bins=bins, **kwrd_arg)
                 if sensors: axes[1,i].set_title(f"Ch{i+2}, "+"cut: %.1f"%minimum+f"mV \n({sensors[f'Ch{i+2}']})")
                 else: axes[1,i].set_title(f"Ch{i+2}")
+                axes[0,i].set_xlabel('mV')
+                axes[0,i].set_ylabel('Events')
                 axes[1,i].set_aspect('equal')
                 axes[1,i].set_xlabel('pixels', fontsize=20)
                 axes[1,i].set_ylabel('pixels', fontsize=20)
