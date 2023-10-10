@@ -104,7 +104,7 @@ def time_limited_kde_evaluate(kde, x_axis):
 
 
 def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, plot=True,
-                       savefig=False, savefig_path='../various plots/', savefig_details='', fig_ax=None):#, rec_depth=0):
+                       savefig=False, savefig_path='../various plots/', savefig_details='', fig_ax=None):#, recursion_depth=0):
     """
     Finds the minimun between two peaks, using 'find_peaks()' function. \n
     Parameters
@@ -118,6 +118,7 @@ def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, pl
     savefig_path:   path of the directory in which to save the plot
     savefig_details: additional details to add to the file name (e.g '_no_cut')
     fig_ax:         (figure, axis) objects so that the plots can be drawn there
+
     Returns
     -------
     x_min:          x position of the minimum
@@ -128,12 +129,14 @@ def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, pl
         fig, ax = plt.subplots(figsize=(15,10), dpi=200)
     ax.semilogy()
 
-    # hist, bins_hist, _ = ax.hist(data, bins=bins, histtype='step')#, density=True)
-    hist, bins_hist, _, fig, ax = plot_histogram(data, bins=bins, fig_ax=(fig,ax))
+    # hist, bins_hist, _, fig, ax = plot_histogram(data, bins=bins, fig_ax=(fig,ax))
+    hist, bins_hist, _, fig, ax = plot_histogram(data, bins=bins, poisson_err=True, error_band=True,
+                                                 fig_ax=(fig,ax))
+
     bins_centers = (bins_hist[1:]+bins_hist[:-1])/2
-        ### I try to find the normalization factor so I can 'denormalize' the kde
+        ### Find the normalization factor so I can 'denormalize' the kde
     density_factor = sum(hist)*np.diff(bins_hist)
-        ### Use kernel density estimate instead
+        ### Use kernel density estimate
     kde = gaussian_kde(data)
     number_of_tries = 5
     for i in range(number_of_tries):
@@ -151,38 +154,37 @@ def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, pl
 
     if not peak_prominence: peak_prominence = np.max(hist)/100
     if not min_prominence: min_prominence = np.max(hist)/100
-    ### find (hopefully two) peaks and plot them
-    peaks_idx, info_peaks = find_peaks(smoothed_hist, prominence=peak_prominence)
-    ax.plot(bins_centers, smoothed_hist, linewidth=1, label='Smoothed hist')
-    ax.plot(bins_centers[peaks_idx], smoothed_hist[peaks_idx], 'x', markersize=10, color='k', label='Peaks')
-    
-    rec_depth = 0
+    recursion_depth = 0  # 0 or 1, not sure which one gives 'max_recursion' tries
+    max_recursion = 10
     ### the recursion makes it repeat kde.evaluate(), which is very slow, let's just try a loop
-    while(rec_depth<10):
+    while(recursion_depth<max_recursion):
+            ### find (hopefully two) peaks and plot them
+        peaks_idx, info_peaks = find_peaks(smoothed_hist, prominence=peak_prominence)
+    
         if len(peaks_idx)>=2: ### find the minimum
             local_min, _ = find_peaks(-smoothed_hist[peaks_idx[0]:peaks_idx[1]], prominence=min_prominence)
         else:    ### if it doesn't work it's because only one peak was found
             # print(f"Two peaks not found, retrying...")
-            ax.clear()
-            peak_prominence *= 0.7    ### reduce prominence if the peaks are not found
-            rec_depth += 1
-            if rec_depth==10:
-                print(f"Two peaks not found after {rec_depth} iterations \n info:{info_peaks}")
+            recursion_depth += 1
+            if recursion_depth==max_recursion:
+                print(f"Two peaks not found after {recursion_depth} iterations \n INFO :{info_peaks}")
                 return None
+            peak_prominence *= 0.5    ### reduce prominence if the peaks are not found
             continue
 
         if len(local_min)==1:
             break
         elif len(local_min)==0:
             print(f"No minimum found, retrying...")
-            ax.clear()
-            min_prominence *= 0.7     ### reduce prominence if the min is not found
-            continue
+            min_prominence *= 0.5       ### reduce prominence if the min is not found
+            # continue
         elif len(local_min)>1:
             print(f"More than one minimum found at: {[bins_centers[min_idx+peaks_idx[0]] for min_idx in local_min]}")
             break
 
     x_min = bins_centers[local_min[0]+peaks_idx[0]]
+    ax.plot(bins_centers, smoothed_hist, linewidth=1, label='Smoothed hist')
+    ax.plot(bins_centers[peaks_idx], smoothed_hist[peaks_idx], 'x', markersize=10, color='k', label='Peaks')
     ax.plot(x_min, smoothed_hist[local_min[0]+peaks_idx[0]], 'o', markersize=10, color='r',
             label='Mimimum: %.1f'%x_min, alpha=.7)
     ax.legend(fontsize=16)
@@ -363,14 +365,14 @@ def plot(df, plot_type, batch, *, sensors=None, bins=200, bins_find_min='rice', 
                 axes[0,i].set_ylabel('Events')
                 if not minimum:
                     print("No minimum found, no 2D plot")
-                    plot_histogram(df[f"pulseHeight_{i+1}"], bins=bins_find_min, poisson_err=True, error_band=True, fig_ax=(fig, axes[0,i]))
-                    axes[0,i].semilogy()
+                    # plot_histogram(df[f"pulseHeight_{i+1}"], bins=bins_find_min, poisson_err=True, error_band=True, fig_ax=(fig, axes[0,i]))
+                    # axes[0,i].semilogy()
                     continue
+                if sensors: axes[0,i].set_title(f"Ch{i+2}, "+"cut: %.1f"%minimum+f"mV \n({sensors[f'Ch{i+2}']})")
+                else: axes[0,i].set_title(f"Ch{i+2}")
                 pulseHeight_filter = np.where(df[f"pulseHeight_{i+1}"]>minimum)
                 hist, _, _, _, = axes[1,i].hist2d(df[f"Xtr_{i}"].iloc[pulseHeight_filter], df[f"Ytr_{i}"].iloc[pulseHeight_filter],
                                                 bins=bins, **kwrd_arg)
-                if sensors: axes[1,i].set_title(f"Ch{i+2}, "+"cut: %.1f"%minimum+f"mV \n({sensors[f'Ch{i+2}']})")
-                else: axes[1,i].set_title(f"Ch{i+2}")
                 axes[1,i].set_aspect('equal')
                 axes[1,i].set_xlabel('pixels', fontsize=20)
                 axes[1,i].set_ylabel('pixels', fontsize=20)
