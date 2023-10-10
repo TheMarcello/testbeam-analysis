@@ -110,7 +110,8 @@ def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, pl
     Parameters
     ----------
     data:           data to be transformed into histogram and of which to find the peaks (e.g. df['pulseHeight_1'])
-    bins:           matplot bins options e.g. int (number of bins), list (bin edges)
+    bins:           matplot bins options e.g. int (number of bins), list (bin edges), str (method)
+                    see https://numpy.org/doc/stable/reference/generated/numpy.histogram_bin_edges.html
     peak_prominence: "height" of the peaks compared to neighbouring data
     min_prominence:  "depth" of the min compared to neighbouring data
     plot:           boolean, default True, if the plot will to be shown
@@ -128,26 +129,24 @@ def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, pl
     else:
         fig, ax = plt.subplots(figsize=(15,10), dpi=200)
     ax.semilogy()
-
     # hist, bins_hist, _, fig, ax = plot_histogram(data, bins=bins, fig_ax=(fig,ax))
     hist, bins_hist, _, fig, ax = plot_histogram(data, bins=bins, poisson_err=True, error_band=True,
                                                  fig_ax=(fig,ax))
-
     bins_centers = (bins_hist[1:]+bins_hist[:-1])/2
         ### Find the normalization factor so I can 'denormalize' the kde
     density_factor = sum(hist)*np.diff(bins_hist)
-        ### Use kernel density estimate
+    ### Use KERNEL DENSITY ESTIMATE
     kde = gaussian_kde(data)
     number_of_tries = 5
     for i in range(number_of_tries):
         try:
             smoothed_hist = time_limited_kde_evaluate(kde, bins_centers) * density_factor 
-        except:
+        except:          ### now take only half of the points to be evaluated
             print(f"Evaluating kde timeout n°: {i+1}. Trying with 1/2 number of points")
-            bins_centers = bins_centers[::2] ### now take only half of points to be evaluated
+            bins_centers = bins_centers[::2] 
             density_factor = density_factor[::2]
             if i==(number_of_tries-1):
-                print("Giving up estimating kde")
+                print("Giving up evaluating kde")
                 return None
         else:
             break
@@ -155,19 +154,24 @@ def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, pl
     if not peak_prominence: peak_prominence = np.max(hist)/100
     if not min_prominence: min_prominence = np.max(hist)/100
     recursion_depth = 0  # 0 or 1, not sure which one gives 'max_recursion' tries
-    max_recursion = 10
+    max_recursion = 5
+
     ### the recursion makes it repeat kde.evaluate(), which is very slow, let's just try a loop
     while(recursion_depth<max_recursion):
             ### find (hopefully two) peaks and plot them
         peaks_idx, info_peaks = find_peaks(smoothed_hist, prominence=peak_prominence)
-    
-        if len(peaks_idx)>=2: ### find the minimum
+        
+        if len(peaks_idx)==1:   ### find_peaks() does not find max values at edges, so I try to add it manually
+                                ### (only if one peak is found already, so not for noisy data)
+            peaks_idx = np.append(np.argmax(smoothed_hist), peaks_idx)
+            
+        if len(peaks_idx)>=2:       ### find the minimum
             local_min, _ = find_peaks(-smoothed_hist[peaks_idx[0]:peaks_idx[1]], prominence=min_prominence)
         else:    ### if it doesn't work it's because only one peak was found
             # print(f"Two peaks not found, retrying...")
             recursion_depth += 1
             if recursion_depth==max_recursion:
-                print(f"Two peaks not found after {recursion_depth} iterations \n INFO :{info_peaks}")
+                print(f"No peak found after {recursion_depth} iterations \n INFO :{info_peaks}")
                 return None
             peak_prominence *= 0.5    ### reduce prominence if the peaks are not found
             continue
