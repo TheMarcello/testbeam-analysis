@@ -46,6 +46,7 @@ into 'Branch_0', 'Branch_1' etc. \n
             new_columns = pd.DataFrame(df_ak[name])
             new_columns.columns = [f'{name}']
             df = pd.concat([df,new_columns], axis=1)
+    del df_ak, tree         ### I am trying to fix the memory leak (not sure this is relevant)
     return df
 
 
@@ -77,7 +78,7 @@ def plot_histogram(data, bins='auto', poisson_err=False, error_band=False, fig_a
     hist, bins_points, info = ax.hist(data, bins=bins, histtype='step', label=label)#, **kwrd_arg)
     if (poisson_err):      ### adding the poissonian error (sqrt(hist_point)
         bins_centers = (bins_points[1:]+bins_points[:-1])/2
-        errorbar_parameters = {'markersize':0, 'linewidth':0, 'alpha':0.5,'ecolor':'k', 'elinewidth':0.3, 'capsize':1, 'errorevery':2}
+        errorbar_parameters = {'markersize':0, 'linewidth':0, 'alpha':0.5,'ecolor':'k', 'elinewidth':0.3, 'capsize':1, 'errorevery':5}
         errorbar_parameters.update(kwrd_arg)  ### this overrides the default options
         if (np.shape(np.shape(data))[0]>1): ### a bit convoluted but checks the dimensions of the data
             for single_hist in hist:     ### in case data is a list of data
@@ -91,7 +92,7 @@ def plot_histogram(data, bins='auto', poisson_err=False, error_band=False, fig_a
             y_error = hist**0.5
             if error_band:      ### I just mask all the errorbars
                 filled_band_parameters = {'alpha':0.5, 'linestyle':'--'}
-                errorbar_parameters.update({'elinewidth':0,'capsize':0})
+                errorbar_parameters.update({'elinewidth':0,'capsize':0,'errorevery':1})
                 ax.fill_between(bins_centers, hist-y_error, hist+y_error, **filled_band_parameters)
             ax.errorbar(bins_centers, hist, yerr=y_error, **errorbar_parameters)
     return hist, bins_points, info, fig, ax
@@ -129,6 +130,7 @@ def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, pl
     else:
         fig, ax = plt.subplots(figsize=(15,10), dpi=200)
     ax.semilogy()
+    ax.set_ylim(10**(-2),) 
     # hist, bins_hist, _, fig, ax = plot_histogram(data, bins=bins, fig_ax=(fig,ax))
     hist, bins_hist, _, fig, ax = plot_histogram(data, bins=bins, poisson_err=True, error_band=True,
                                                  fig_ax=(fig,ax))
@@ -150,44 +152,47 @@ def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, pl
                 return None
         else:
             break
+    ### it plots even if it cannot find the peaks and/or min
+    ax.plot(bins_centers, smoothed_hist, linewidth=1, label='Smoothed hist')
 
     if not peak_prominence: peak_prominence = np.max(hist)/100
     if not min_prominence: min_prominence = np.max(hist)/100
     recursion_depth = 0  # 0 or 1, not sure which one gives 'max_recursion' tries
-    max_recursion = 5
-
-    ### the recursion makes it repeat kde.evaluate(), which is very slow, let's just try a loop
+    max_recursion = 20
+    ### 
     while(recursion_depth<max_recursion):
             ### find (hopefully two) peaks and plot them
         peaks_idx, info_peaks = find_peaks(smoothed_hist, prominence=peak_prominence)
-        
-        if len(peaks_idx)==1:   ### find_peaks() does not find max values at edges, so I try to add it manually
-                                ### (only if one peak is found already, so not for noisy data)
-            peaks_idx = np.append(np.argmax(smoothed_hist), peaks_idx)
+        global_max_idx = np.argmax(smoothed_hist)
+        if (len(peaks_idx)==1) and (global_max_idx!=peaks_idx[0]):  ### find_peaks() does not find max values at edges,
+            peaks_idx = np.append(global_max_idx, peaks_idx)        ### so I the global max (if not identical to the peak found)
             
         if len(peaks_idx)>=2:       ### find the minimum
-            local_min, _ = find_peaks(-smoothed_hist[peaks_idx[0]:peaks_idx[1]], prominence=min_prominence)
+            local_min, info_min = find_peaks(-smoothed_hist[peaks_idx[0]:peaks_idx[1]], prominence=min_prominence)
+            
         else:    ### if it doesn't work it's because only one peak was found
             # print(f"Two peaks not found, retrying...")
             recursion_depth += 1
             if recursion_depth==max_recursion:
-                print(f"No peak found after {recursion_depth} iterations \n INFO :{info_peaks}")
+                print(f"Two PEAKS not found after {recursion_depth} iterations \n INFO :{info_peaks}")
                 return None
             peak_prominence *= 0.5    ### reduce prominence if the peaks are not found
             continue
-
+### I NEED TO FIX THIS CYCLE, IT'S NOT WORKING
         if len(local_min)==1:
             break
-        elif len(local_min)==0:
-            print(f"No minimum found, retrying...")
-            min_prominence *= 0.5       ### reduce prominence if the min is not found
-            # continue
         elif len(local_min)>1:
             print(f"More than one minimum found at: {[bins_centers[min_idx+peaks_idx[0]] for min_idx in local_min]}")
             break
+        elif len(local_min)==0:
+            recursion_depth += 1
+            # print(f"No minimum found, retrying...")
+            if recursion_depth==max_recursion:
+                print(f"No MIN found after {recursion_depth} iterations")# \n INFO :{info_min}")
+                return None
+            min_prominence *= 0.5       ### reduce prominence if the min is not found
 
     x_min = bins_centers[local_min[0]+peaks_idx[0]]
-    ax.plot(bins_centers, smoothed_hist, linewidth=1, label='Smoothed hist')
     ax.plot(bins_centers[peaks_idx], smoothed_hist[peaks_idx], 'x', markersize=10, color='k', label='Peaks')
     ax.plot(x_min, smoothed_hist[local_min[0]+peaks_idx[0]], 'o', markersize=10, color='r',
             label='Mimimum: %.1f'%x_min, alpha=.7)
@@ -369,8 +374,7 @@ def plot(df, plot_type, batch, *, sensors=None, bins=200, bins_find_min='rice', 
                 axes[0,i].set_ylabel('Events')
                 if not minimum:
                     print("No minimum found, no 2D plot")
-                    # plot_histogram(df[f"pulseHeight_{i+1}"], bins=bins_find_min, poisson_err=True, error_band=True, fig_ax=(fig, axes[0,i]))
-                    # axes[0,i].semilogy()
+                    axes[0,i].set_title(f"Ch{i+2} \n({sensors[f'Ch{i+2}']})")
                     continue
                 if sensors: axes[0,i].set_title(f"Ch{i+2}, "+"cut: %.1f"%minimum+f"mV \n({sensors[f'Ch{i+2}']})")
                 else: axes[0,i].set_title(f"Ch{i+2}")
