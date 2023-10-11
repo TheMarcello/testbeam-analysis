@@ -18,6 +18,8 @@ from scipy.stats import gaussian_kde
 from wrapt_timeout_decorator import timeout
 
 
+PIXEL_SIZE = 0.0185 #mm
+
 def root_to_df(file_path, branches):
     """
     Converts a file.root into pandas DataFrame unpacking branches with multiple channels \
@@ -79,14 +81,14 @@ def plot_histogram(data, bins='auto', poisson_err=False, error_band=False, fig_a
     if (poisson_err):      ### adding the poissonian error (sqrt(hist_point)
         bins_centers = (bins_points[1:]+bins_points[:-1])/2
         errorbar_parameters = {'markersize':0, 'linewidth':0, 'alpha':0.5,'ecolor':'k', 'elinewidth':0.3, 'capsize':1, 'errorevery':5}
-        errorbar_parameters.update(kwrd_arg)  ### this overrides the default options
+        errorbar_parameters.update(kwrd_arg)  ### this adds the default options (and overrides them if repeated)
         if (np.shape(np.shape(data))[0]>1): ### a bit convoluted but checks the dimensions of the data
             for single_hist in hist:     ### in case data is a list of data
                 y_error = single_hist**0.5
                 if error_band:  ### I just mask all the errorbars
                     filled_band_parameters = {'alpha':0.5, 'linestyle':'--'}
-                    errorbar_parameters.update({'elinewidth':0,'capsize':0,'errorevery':1})
-                    ax.fill_between(bins_centers, single_hist-y_error, single_hist+y_error, **filled_band_parameters)
+                    errorbar_parameters.update({'elinewidth':0,'capsize':0,'errorevery':1})     ### defaults specific to 
+                    ax.fill_between(bins_centers, single_hist-y_error, single_hist+y_error, **filled_band_parameters)#, label=f"{label} error")
                 ax.errorbar(bins_centers, single_hist, yerr=single_hist**0.5, **errorbar_parameters)
         else:
             y_error = hist**0.5
@@ -340,21 +342,30 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
                 axes[i].set_aspect('equal')
                 axes[i].set_xlabel('pixels', fontsize=20)
                 axes[i].set_ylabel('pixels', fontsize=20)
-                
+                secx = axes[i].secondary_xaxis('top', functions=(lambda x: x*PIXEL_SIZE, lambda x: x*PIXEL_SIZE))
+                secy = axes[i].secondary_yaxis('right', functions=(lambda x: x*PIXEL_SIZE, lambda x: x*PIXEL_SIZE))
+                secx.set_xlabel('mm', fontsize=20)
+                secy.set_ylabel('mm', fontsize=20)
+
         case "1D_Tracks":        ### 1D tracks plots
             fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(15,6), dpi=200, sharey='all')
             if not bins: bins = (200,200)   ### default binning
             for i in range(n_DUT):
                 plot_histogram(df[f"Xtr_{i}"], label=f"Xtr_{i}", bins=bins[0], fig_ax=(fig,axes[0]), **kwrd_arg)
                 plot_histogram(df[f"Ytr_{i}"], label=f"Ytr_{i}", bins=bins[1], fig_ax=(fig,axes[1]), **kwrd_arg)
-            axes[0].legend(fontsize=16)
-            axes[1].legend(fontsize=16)
-        
+            for ax in axes:     ### modify both axes
+                ax.legend(fontsize=16)
+                ax.semilogy()
+                ax.set_xlabel('pixels', fontsize=20)
+                ax.set_ylabel('Events (log)', fontsize=20)
+
         case "pulseHeight":       ### PulseHeight plot
             fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(15,10), dpi=200)
             if not bins: bins = 'rice'
             for i in range(n_DUT+1):
-                plot_histogram(df[f"pulseHeight_{i}"], poisson_err=True, error_band=True, bins=bins, fig_ax=(fig,axes), label=f"sensor: {sensors[f'Ch{i+1}']}", **kwrd_arg)
+                if sensors: sensor_label=f"sensor: {sensors[f'Ch{i+1}']}"
+                else: sensor_label=f'Ch{i+1}'
+                plot_histogram(df[f"pulseHeight_{i}"], poisson_err=True, error_band=True, bins=bins, fig_ax=(fig,axes), label=sensor_label, **kwrd_arg)
             axes.semilogy()
             axes.set_xlabel("PulseHeight [mV]", fontsize=20)
             axes.set_ylabel("Events (log)", fontsize=20)
@@ -379,11 +390,17 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
                 if sensors: axes[0,i].set_title(f"Ch{i+2}, "+"cut: %.1f"%minimum+f"mV \n({sensors[f'Ch{i+2}']})")
                 else: axes[0,i].set_title(f"Ch{i+2}")
                 pulseHeight_filter = np.where(df[f"pulseHeight_{i+1}"]>minimum)
-                hist, _, _, _, = axes[1,i].hist2d(df[f"Xtr_{i}"].iloc[pulseHeight_filter], df[f"Ytr_{i}"].iloc[pulseHeight_filter],
+                axes[1,i].hist2d(df[f"Xtr_{i}"].iloc[pulseHeight_filter], df[f"Ytr_{i}"].iloc[pulseHeight_filter],
                                                 bins=bins, **kwrd_arg)
                 axes[1,i].set_aspect('equal')
                 axes[1,i].set_xlabel('pixels', fontsize=20)
                 axes[1,i].set_ylabel('pixels', fontsize=20)
+
+        case "1D_Efficiency":
+            fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(15,6), dpi=200, sharey='all')
+
+
+        # case "2D_Efficiency"
                     
         case other:
             print("""No plot_type found, options are:
@@ -391,13 +408,14 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
             return
         
     fig.suptitle(f"{plot_type}, batch: {batch} {savefig_details}", fontsize=24, y=1.15)
-
     if savefig: fig.savefig(f"{savefig_path}/{plot_type}_{batch}{savefig_details}.jpg", bbox_inches="tight")
     return fig, axes
 
+    # Efficiency Xtr Ytr
+
+
     # Efficiency 2D plot
 
-    # Efficiency Xtr Ytr
 
 # if __name__ == '__main__':
 #     main()
