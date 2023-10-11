@@ -129,11 +129,11 @@ def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, pl
         fig, ax = fig_ax
     else:
         fig, ax = plt.subplots(figsize=(15,10), dpi=200)
-    ax.semilogy()
-    ax.set_ylim(10**(-2),) 
     # hist, bins_hist, _, fig, ax = plot_histogram(data, bins=bins, fig_ax=(fig,ax))
     hist, bins_hist, _, fig, ax = plot_histogram(data, bins=bins, poisson_err=True, error_band=True,
                                                  fig_ax=(fig,ax))
+    ax.semilogy()
+    ax.set_ylim(10**(-2), 1.5*np.max(hist))
     bins_centers = (bins_hist[1:]+bins_hist[:-1])/2
         ### Find the normalization factor so I can 'denormalize' the kde
     density_factor = sum(hist)*np.diff(bins_hist)
@@ -154,7 +154,6 @@ def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, pl
             break
     ### it plots even if it cannot find the peaks and/or min
     ax.plot(bins_centers, smoothed_hist, linewidth=1, label='Smoothed hist')
-
     if not peak_prominence: peak_prominence = np.max(hist)/100
     if not min_prominence: min_prominence = np.max(hist)/100
     recursion_depth = 0  # 0 or 1, not sure which one gives 'max_recursion' tries
@@ -303,7 +302,7 @@ def read_pickle(file):
     return pickle_dict
 
 
-def plot(df, plot_type, batch, *, sensors=None, bins=200, bins_find_min='rice', n_DUT=3,
+def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice', n_DUT=3,
          savefig=False, savefig_path='../various plots', savefig_details='', fig_ax=None,
          **kwrd_arg):
     """
@@ -315,10 +314,10 @@ def plot(df, plot_type, batch, *, sensors=None, bins=200, bins_find_min='rice', 
                         '2D_Tracks':    2D plot of the reconstructed tracks
                         '1D_Tracks':    histogram of reconstructed tracks distribution (Xtr and Ytr)
                         'pulseHeight':  histogram of the pulseHeight of all channels (log scale)
-                        '2D_Sensors':   2D plot of tracks with pulseHeight cut (highlighting the sensors)
+                        '2D_Sensors':   pulseHeight cut plot + 2D plot of tracks with cut (highlighting the sensors)
     batch:          batch number
     sensors:        dictionary of the sensors in this batch
-    bins:           binning options, (int,int) or (bin_edges_list, bin_edges_list), can be different for different plot_type
+    bins:           binning options, (int,int) or (bin_edges_list, bin_edges_list), different default for each plot_type
     bins_find_min:  binning options for the find_min_btw_peaks function (in '2D_Sensors')  
     n_DUT:          number of devices under test (3 for each Scope for May 2023)
     savefig:        boolean option to save the plot
@@ -329,10 +328,11 @@ def plot(df, plot_type, batch, *, sensors=None, bins=200, bins_find_min='rice', 
     -------
     fig, axes:        figure and axis objects so that more manipulation can be done
     """
-    match plot_type:        
+    match plot_type:
         case "2D_Tracks":        ### 2D tracks plots
             fig, axes = plt.subplots(nrows=1, ncols=n_DUT, figsize=(15,6), sharex='all', sharey='all', dpi=200)
             fig.tight_layout(w_pad=6, h_pad=4)
+            if not bins: bins = (200,200)   ### default binning
             for i in range(n_DUT):
                 hist, _, _, _, = axes[i].hist2d(df[f"Xtr_{i}"], df[f"Ytr_{i}"], bins=bins, **kwrd_arg)
                 if sensors: axes[i].set_title(f"Ch{i+2}\n({sensors[f'Ch{i+2}']})")
@@ -343,16 +343,16 @@ def plot(df, plot_type, batch, *, sensors=None, bins=200, bins_find_min='rice', 
                 
         case "1D_Tracks":        ### 1D tracks plots
             fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(15,6), dpi=200, sharey='all')
+            if not bins: bins = (200,200)   ### default binning
             for i in range(n_DUT):
                 plot_histogram(df[f"Xtr_{i}"], label=f"Xtr_{i}", bins=bins[0], fig_ax=(fig,axes[0]), **kwrd_arg)
                 plot_histogram(df[f"Ytr_{i}"], label=f"Ytr_{i}", bins=bins[1], fig_ax=(fig,axes[1]), **kwrd_arg)
             axes[0].legend(fontsize=16)
             axes[1].legend(fontsize=16)
-            # axes[0].grid('--')    # this is already in plot_histogram
-            # axes[1].grid('--')
         
         case "pulseHeight":       ### PulseHeight plot
             fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(15,10), dpi=200)
+            if not bins: bins = 'rice'
             for i in range(n_DUT+1):
                 plot_histogram(df[f"pulseHeight_{i}"], poisson_err=True, error_band=True, bins=bins, fig_ax=(fig,axes), label=f"sensor: {sensors[f'Ch{i+1}']}", **kwrd_arg)
             axes.semilogy()
@@ -361,10 +361,10 @@ def plot(df, plot_type, batch, *, sensors=None, bins=200, bins_find_min='rice', 
             axes.set_title(f"PulseHeight (no cut), batch {batch}, bins {bins}", fontsize=24, y=1.05)
             axes.set_xlim(left=-10)
             axes.legend(fontsize=20)
-            # axes.grid('--') # this is already in plot_histogram
             
         case "2D_Sensors":        ### 2D tracks plots filtering some noise out (pulseHeight cut)
             fig, axes = plt.subplots(nrows=2, ncols=n_DUT, figsize=(20,12), sharex=False, sharey=False, dpi=200)
+            if not bins: bins = (200,200)   ### default binning
             fig.tight_layout(w_pad=6, h_pad=4)
             for i in range(n_DUT):
                 print(f"DUT_{i}")                   ### BINS: scott, rice or sqrt; stone seems slow, rice seems the fastest
