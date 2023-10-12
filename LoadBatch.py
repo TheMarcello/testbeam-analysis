@@ -179,7 +179,6 @@ def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, pl
                 return None
             peak_prominence *= 0.5    ### reduce prominence if the peaks are not found
             continue
-### I NEED TO FIX THIS CYCLE, IT'S NOT WORKING
         if len(local_min)==1:
             break
         elif len(local_min)>1:
