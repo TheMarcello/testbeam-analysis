@@ -77,10 +77,12 @@ def plot_histogram(data, bins='auto', poisson_err=False, error_band=False, fig_a
     else:
         fig, ax = plt.subplots(figsize=(10,6), dpi=300)
     ax.grid('--')
-    hist, bins_points, info = ax.hist(data, bins=bins, histtype='step', label=label, **kwrd_arg)
+    hist_parameters = {'histtype':'step'}
+    hist_parameters.update(kwrd_arg)
+    hist, bins_points, info = ax.hist(data, bins=bins, label=label, **hist_parameters)
     if (poisson_err):      ### adding the poissonian error (sqrt(hist_point)
         bins_centers = (bins_points[1:]+bins_points[:-1])/2
-        errorbar_parameters = {'markersize':0, 'linewidth':0, 'alpha':0.5,'ecolor':'k', 'elinewidth':0.3, 'capsize':1, 'errorevery':5}
+        errorbar_parameters = {'markersize':0, 'linewidth':0, 'alpha':0.5,'ecolor':'k', 'elinewidth':0.3, 'capsize':1, 'errorevery':1}
         errorbar_parameters.update(kwrd_arg)  ### this adds the default options (and overrides them if repeated)
         if (np.shape(np.shape(data))[0]>1): ### a bit convoluted but checks the dimensions of the data
             for single_hist in hist:     ### in case data is a list of data
@@ -326,7 +328,7 @@ def read_pickle(file):
     return pickle_dict
 
 
-def geometry_mask(df, bins, bins_find_min, DUT_number):
+def geometry_mask(df, bins, bins_find_min, DUT_number, only_center=False):
     """
     Creates a boolean mask for selecting the 2D shape of the sensor
 
@@ -336,6 +338,7 @@ def geometry_mask(df, bins, bins_find_min, DUT_number):
     bins:           bins options for  "Xtr" and "Ytr"
     bins_find_min:  bins options for 'find_min_btw_peaks()'
     DUT_number:     number of the DUT (1,2,3), corresponding to Channels 2,3,4
+    only_center:   bool, if the geometry mask should be the central 0.5x0.5 mm^2 of the sensor
     """
     i = DUT_number-1 ### index of the DUT
     try:    
@@ -348,13 +351,20 @@ def geometry_mask(df, bins, bins_find_min, DUT_number):
     except:
         print("W: in 'geometry_mask()', something wrong, no boolean mask")
         return pd.Series(True, index=df.index)  ### return all True array if there is no minimum
+    if only_center:
+        central_edge = 0.5 / 2 # 0.5mm / 2
+        center = ((left_edge+right_edge)/2, (bottom_edge+top_edge)/2)  ### center of the pixel
+        left_edge =     np.floor(center[0] - central_edge/PIXEL_SIZE)  ### new edges, rounded to the pixel
+        right_edge =    np.ceil(center[0] + central_edge/PIXEL_SIZE)
+        bottom_edge =   np.floor(center[1] - central_edge/PIXEL_SIZE)
+        top_edge =      np.ceil(center[1] + central_edge/PIXEL_SIZE)
     xgeometry = np.logical_and(df[f"Xtr_{i}"]>left_edge, df[f"Xtr_{i}"]<right_edge)
     ygeometry = np.logical_and(df[f"Ytr_{i}"]>bottom_edge, df[f"Ytr_{i}"]<top_edge)
     bool_geometry = np.logical_and(xgeometry, ygeometry)
     return bool_geometry
 
 
-def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice', n_DUT=3, mask=None, no_geometry_cut=True,
+def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice', n_DUT=[1,2,3], mask=None, no_geometry_cut=True, only_center=False,
          savefig=False, savefig_path='../various plots', savefig_details='', fig_ax=None,
          **kwrd_arg):
     """
@@ -386,15 +396,14 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
             if fig_ax:  fig, axes = fig_ax
             else:       fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(15,6), dpi=200, sharey='all')
             if not bins: bins = (200,200)   ### default binning
-            for i in range(n_DUT):
-                if sensors: sensor_label=f"sensor: {sensors[f'Ch{i+1}']}"
-                else:       sensor_label=f"Ch{i+1}"
-                plot_histogram(df[f"Xtr_{i}"], label=sensor_label, bins=bins[0], fig_ax=(fig,axes[0]), **kwrd_arg)
-                plot_histogram(df[f"Ytr_{i}"], label=sensor_label, bins=bins[1], fig_ax=(fig,axes[1]), **kwrd_arg)
+            for dut in n_DUT:
+                if sensors: sensor_label=f"sensor: {sensors[f'Ch{dut+1}']}"
+                else:       sensor_label=f"Ch{dut+1}"
+                plot_histogram(df[f"Xtr_{dut-1}"], label=sensor_label, bins=bins[0], fig_ax=(fig,axes[0]), **kwrd_arg)
+                plot_histogram(df[f"Ytr_{dut-1}"], label=sensor_label, bins=bins[1], fig_ax=(fig,axes[1]), **kwrd_arg)
+            axes[0].set_title("X axis projection")
+            axes[1].set_title("Y axis projection")
             for ax in axes:     ### modify both axes
-                if sensors: plot_title = f"Ch{i+2}\n({sensors[f'Ch{i+2}']})"
-                else: plot_title = f"Ch{i+2}"
-                ax.set_title(plot_title)
                 ax.legend(fontsize=16)
                 ax.semilogy()
                 ax.set_xlabel('pixels', fontsize=20)
@@ -403,13 +412,14 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
             
         case "2D_Tracks":        ### 2D tracks plots
             if fig_ax:  fig, axes = fig_ax
-            else:       fig, axes = plt.subplots(nrows=1, ncols=n_DUT, figsize=(15,6), sharex='all', sharey=False, dpi=200)
+            else:       fig, axes = plt.subplots(nrows=1, ncols=len(n_DUT), figsize=(15,6), sharex='all', sharey=False, dpi=200)
             if not bins: bins = (200,200)   ### default binning
-            for i in range(n_DUT):
-                if mask:  hist, _, _, _, = axes[i].hist2d(df[f"Xtr_{i}"].loc[mask[i]], df[f"Ytr_{i}"].loc[mask[i]], bins=bins, **kwrd_arg)
-                else:       hist, _, _, _, = axes[i].hist2d(df[f"Xtr_{i}"], df[f"Ytr_{i}"], bins=bins, **kwrd_arg)
-                if sensors: plot_title = f"Ch{i+2}\n({sensors[f'Ch{i+2}']})"
-                else: plot_title = f"Ch{i+2}"
+            if len(n_DUT)==1: axes = axes[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case
+            for i,dut in enumerate(n_DUT):
+                if mask:  hist, _, _, _, = axes[i].hist2d(df[f"Xtr_{dut-1}"].loc[mask[dut-1]], df[f"Ytr_{dut-1}"].loc[mask[dut-1]], bins=bins, **kwrd_arg)
+                else:       hist, _, _, _, = axes[i].hist2d(df[f"Xtr_{dut-1}"], df[f"Ytr_{dut-1}"], bins=bins, **kwrd_arg)
+                if sensors: plot_title = f"Ch{dut+1}\n({sensors[f'Ch{dut+1}']})"
+                else: plot_title = f"Ch{dut+1}"
                 axes[i].grid('--')
                 axes[i].set_title(plot_title)
                 axes[i].set_aspect('equal')
@@ -426,7 +436,7 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
             if fig_ax:  fig, axes = fig_ax
             else:       fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(15,10), dpi=200)
             if not bins: bins = 'rice'
-            for i in range(n_DUT+1):
+            for i in n_DUT.insert(0,0):
                 if sensors: sensor_label=f"sensor: {sensors[f'Ch{i+1}']}"
                 else:       sensor_label=f'Ch{i+1}'
                 plot_histogram(df[f"pulseHeight_{i}"], poisson_err=True, error_band=True, bins=bins, fig_ax=(fig,axes), label=sensor_label, **kwrd_arg)
@@ -440,24 +450,25 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
             
         case "2D_Sensors":        ### 2D tracks plots filtering some noise out (pulseHeight cut)
             if fig_ax:  fig, axes = fig_ax
-            else:       fig, axes = plt.subplots(nrows=2, ncols=n_DUT, figsize=(20,12), sharex=False, sharey=False, dpi=200)
+            else:       fig, axes = plt.subplots(nrows=2, ncols=len(n_DUT), figsize=(20,12), sharex=False, sharey=False, dpi=200)
             if not bins: bins = (200,200)   ### default binning
             fig.tight_layout(w_pad=6, h_pad=4)
-            for i in range(n_DUT):               ### BINS: scott, rice or sqrt; stone seems slow, rice seems the fastest
-                print(f"DUT_{i}")                  
-                minimum = find_min_btw_peaks(df[f"pulseHeight_{i+1}"], bins=bins_find_min, plot=True, fig_ax=(fig,axes[0,i]),
-                                             savefig=False, savefig_details=f"_{batch}_DUT{i}"+savefig_details)
+            if len(n_DUT)==1: axes = axes[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case
+            for i,dut in enumerate(n_DUT): 
+                print(f"DUT_{dut}")                   ### BINS: scott, rice or sqrt; stone seems slow, rice seems the fastest
+                minimum = find_min_btw_peaks(df[f"pulseHeight_{dut}"], bins=bins_find_min, plot=True, fig_ax=(fig,axes[0,i]),
+                                             savefig=False)#, savefig_details=f"_{batch}_DUT{i}"+savefig_details)
                 axes[0,i].set_xlabel('mV')
                 axes[0,i].set_ylabel('Events')
                 if not minimum:
                     print("No minimum found, no 2D plot")
-                    axes[0,i].set_title(f"Ch{i+2} \n({sensors[f'Ch{i+2}']})")
+                    axes[0,i].set_title(f"Ch{dut+1} \n({sensors[f'Ch{dut+1}']})")
                     continue
-                if sensors: plot_title = f"Ch{i+2}, "+"cut: %.1f"%minimum+f"mV \n({sensors[f'Ch{i+2}']})"
-                else:       plot_title = f"Ch{i+2}"
+                if sensors: plot_title = f"Ch{dut+1}, "+"cut: %.1f"%minimum+f"mV \n({sensors[f'Ch{dut+1}']})"
+                else:       plot_title = f"Ch{dut+1}"
                 axes[0,i].set_title(plot_title)
-                pulseHeight_filter = df[f"pulseHeight_{i+1}"]>minimum
-                axes[1,i].hist2d(df[f"Xtr_{i}"].loc[pulseHeight_filter], df[f"Ytr_{i}"].loc[pulseHeight_filter],
+                pulseHeight_filter = df[f"pulseHeight_{dut}"]>minimum
+                axes[1,i].hist2d(df[f"Xtr_{dut-1}"].loc[pulseHeight_filter], df[f"Ytr_{dut-1}"].loc[pulseHeight_filter],
                                                 bins=bins, **kwrd_arg)
                 axes[1,i].grid('--')
                 axes[1,i].set_aspect('equal')
@@ -477,26 +488,27 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
                     case other: print(f"invalid argument: {other}")
             coord = ['X','Y']
             if fig_ax:  fig, axes = fig_ax
-            else:       fig, axes = plt.subplots(nrows=2, ncols=n_DUT, figsize=(20,12), sharex=False, sharey=False, dpi=200)
+            else:       fig, axes = plt.subplots(nrows=2, ncols=len(n_DUT), figsize=(20,12), sharex=False, sharey=False, dpi=200)
             if not bins: bins = (200)       ### default binning
             fig.tight_layout(w_pad=6, h_pad=10)
-            for i in range(n_DUT):
+            if len(n_DUT)==1: axes = axes[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case
+            for i,dut in enumerate(n_DUT): 
                 if no_geometry_cut: bool_geometry = pd.Series(True,index=df.index)
-                else:       bool_geometry = geometry_mask(df, bins, bins_find_min, DUT_number=i+1)    ### this is a boolean mask of the selected positions                
-                events_above_threshold = df[f"charge_{i+1}"].loc[bool_geometry]/transimpedance[i] > threshold_charge
+                else:       bool_geometry = geometry_mask(df, bins, bins_find_min, DUT_number=dut)    ### this is a boolean mask of the selected positions                
+                events_above_threshold = df[f"charge_{dut}"].loc[bool_geometry]/transimpedance[dut-1] > threshold_charge
                 for coord_idx, XY in enumerate(coord):
                     above_threshold = np.logical_and(bool_geometry, events_above_threshold)
-                    total_events_in_bin, bins_edges, _, _, _ = plot_histogram(df[f"{XY}tr_{i}"].loc[bool_geometry], bins=bins[coord_idx], fig_ax=(fig, axes[coord_idx,i]))
-                    events_above_threshold_in_bin, _, _, _, _ = plot_histogram(df[f"{XY}tr_{i}"].loc[above_threshold], bins=bins[coord_idx], fig_ax=(fig, axes[coord_idx,i]))
+                    total_events_in_bin, bins_edges, _, _, _ = plot_histogram(df[f"{XY}tr_{dut-1}"].loc[bool_geometry], bins=bins[coord_idx], fig_ax=(fig, axes[coord_idx,i]))
+                    events_above_threshold_in_bin, _, _, _, _  = plot_histogram(df[f"{XY}tr_{dut-1}"].loc[above_threshold], bins=bins[coord_idx], fig_ax=(fig, axes[coord_idx,i]))
                     axes[coord_idx, i].clear()
                     bins_centers = (bins_edges[:-1]+bins_edges[1:])/2
                     eff, err = efficiency_k_n(events_above_threshold_in_bin, total_events_in_bin)
-                    axes[coord_idx,i].plot(bins_centers, eff, label=f"Ch{i+1}", drawstyle='steps-mid')
+                    axes[coord_idx,i].plot(bins_centers, eff, label=f"Ch{dut+1}", drawstyle='steps-mid')
                     sigma_coeff = 1
                     axes[coord_idx,i].errorbar(bins_centers, eff, yerr=sigma_coeff*err, elinewidth=1, markersize=0, linewidth=0, capsize=1.5,
                                 label=f"error: {sigma_coeff}$\sigma$")
-                    if sensors: plot_title = f"{XY} axis projection, Ch{i+2} \n({sensors[f'Ch{i+2}']})"
-                    else:       plot_title = f"{XY} axis projection, Ch{i+2}"
+                    if sensors: plot_title = f"{XY} axis projection, Ch{dut+1} \n({sensors[f'Ch{dut+1}']})"
+                    else:       plot_title = f"{XY} axis projection, Ch{dut+1}"
                     axes[coord_idx,i].set_title(plot_title, fontsize=24, y=1.05)
                     axes[coord_idx,i].set_xlabel(f"{XY} position (pixels)", fontsize=20)
                     axes[coord_idx,i].set_ylabel("Efficiency", fontsize=20)
@@ -506,35 +518,36 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
 
         case "2D_Efficiency":
             if fig_ax:  fig, axes = fig_ax
-            else:       fig, axes = plt.subplots(nrows=1, ncols=n_DUT, figsize=(15,6), sharex=False, sharey=False, dpi=200)
+            else:       fig, axes = plt.subplots(nrows=1, ncols=len(n_DUT), figsize=(15,6), sharex=False, sharey=True, dpi=200)
             if not bins: bins = (200,200)       ### default binning
-            fig.tight_layout(w_pad=6, h_pad=4)
+            fig.tight_layout(w_pad=6, h_pad=6)
+            if len(n_DUT)==1: axes = axes[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case
             for key, value in kwrd_arg.items():
                 match key:
                     case 'threshold_charge': threshold_charge=value
                     case 'transimpedance':   transimpedance=value
                     case other: print(f"invalid argument: {other}")
-            for i in range(n_DUT):
+            for i,dut in enumerate(n_DUT):
                 if no_geometry_cut: bool_geometry = pd.Series(True,index=df.index)
-                else:    bool_geometry = geometry_mask(df, bins, bins_find_min, DUT_number=i+1)    ### this is a boolean mask of the selected positions                
-                total_events_in_bin, x_edges, y_edges, _ = axes[i].hist2d(df[f"Xtr_{i}"].loc[bool_geometry], df[f"Ytr_{i}"].loc[bool_geometry], bins=bins)
-                events_above_threshold = df[f"charge_{i+1}"].loc[bool_geometry]/transimpedance[i] > threshold_charge
+                else:    bool_geometry = geometry_mask(df, bins, bins_find_min, DUT_number=dut, only_center=only_center)    ### this is a boolean mask of the selected positions                
+                total_events_in_bin, x_edges, y_edges, _ = axes[i].hist2d(df[f"Xtr_{dut-1}"].loc[bool_geometry], df[f"Ytr_{dut-1}"].loc[bool_geometry], bins=bins)
+                events_above_threshold = df[f"charge_{dut}"].loc[bool_geometry]/transimpedance[dut-1] > threshold_charge
                 above_threshold = np.logical_and(bool_geometry, events_above_threshold)
-                events_above_threshold_in_bin, _, _, _ = axes[i].hist2d(df[f"Xtr_{i}"].loc[above_threshold], df[f"Ytr_{i}"].loc[above_threshold], bins=bins)
+                events_above_threshold_in_bin, _, _, _ = axes[i].hist2d(df[f"Xtr_{dut-1}"].loc[above_threshold], df[f"Ytr_{dut-1}"].loc[above_threshold], bins=bins)
                 efficiency_map = np.divide(events_above_threshold_in_bin, total_events_in_bin, where=total_events_in_bin!=0,
                                         out=np.zeros_like(events_above_threshold_in_bin))*100 # in percentage
                 axes[i].clear()
-                axes[i].imshow(efficiency_map.T, origin='lower', extent=[x_edges[0], x_edges[-1], y_edges[0], y_edges[-1]],
+                im = axes[i].imshow(efficiency_map.T, origin='lower', extent=[x_edges[0], x_edges[-1], y_edges[0], y_edges[-1]],
                         aspect='equal', vmin=0, vmax=100)
                 axes[i].grid('--')
-                # axes[i].colorbar(label='Efficiency')
                 axes[i].set_xlabel('X Position', fontsize=20)
                 axes[i].set_ylabel('Y Position', fontsize=20)
                 secx = axes[i].secondary_xaxis('top', functions=(lambda x: x*PIXEL_SIZE, lambda y: y*PIXEL_SIZE))
                 secy = axes[i].secondary_yaxis('right', functions=(lambda x: x*PIXEL_SIZE, lambda y: y*PIXEL_SIZE))
                 secx.set_xlabel('mm', fontsize=20)
                 secy.set_ylabel('mm', fontsize=20)
-                title_position = 1.15
+            title_position = 1.15
+            fig.colorbar(im, ax=axes.ravel().tolist(), label="Efficiency (%)")
 
         case other:
             print("""No plot_type found, options are:
