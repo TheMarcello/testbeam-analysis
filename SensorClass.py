@@ -1,10 +1,10 @@
 import numpy as np # NumPy
 import matplotlib.pylab as plt # Matplotlib plots
 import pandas as pd # Pandas
-import uproot
-import pickle
+# import uproot
+# import pickle
 
-import os # read directories etc.
+# import os # read directories etc.
 from scipy.signal import find_peaks, gaussian
 from scipy.stats import gaussian_kde
 
@@ -20,11 +20,12 @@ class Batch:
     temperature
     S1, S2:       
     """
-    def __init__(self, batch_number, angle, runs, temperature, S1, S2):
+    def __init__(self, batch_number, angle, runs, temperatureA, temperatrureB, S1, S2):
         self.batch_number = batch_number
         self.angle = angle
         self.runs = runs
-        self.temperature = temperature
+        self.tempA = temperatureA
+        self.tempB = temperatrureB
         self.S1 = S1
         self.S2 = S2
         
