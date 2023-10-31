@@ -14,11 +14,13 @@ from scipy.stats import gaussian_kde
 class Batch:
     """
     Batch class, includes all relevant information of the batch, such as
-    batch_number: 
-    angle:   
-    runs
-    temperature
-    S1, S2:       
+    ------------- 
+    batch_number:   batch number
+    angle:          angle to the beam   [°degrees]
+    runs:           list of run numbers belonging to the same batch
+    tempA:          temperature of thermometer A [°C]
+    tempB:          temperature of thermometer B [°C]
+    S1, S2:         Oscilloscope objects 1 and 2
     """
     def __init__(self, batch_number, angle, runs, temperatureA, temperatrureB, S1, S2):
         self.batch_number = batch_number
@@ -33,22 +35,32 @@ class Batch:
 class Oscilloscope:
     """
     The single oscilloscope containing the four channels with the four sensors
+    ------------
+    name:           name of the oscilloscope ('S1' or 'S2' usually)
+    channels:       dictionary of the 4 channels: {'Ch1':sensor1, etc.}
     """
     def __init__(self, name, sensor1, sensor2, sensor3, sensor4): ### or **sensors ??? = {'Ch1':sensor1, 'Ch2':sensor2 etc.}
         self.name = name
-        self.channels = {'Ch1':sensor1, 'Ch2':sensor2, 'Ch3':sensor3, 'Ch4':sensor4}#, etc.}# dict of channels
+        self.channels = {'Ch1':sensor1, 'Ch2':sensor2, 'Ch3':sensor3, 'Ch4':sensor4}
 
         
 class Sensor:
     """
     Class to describe the DUT that is being studied in a single batch
+    ------------
+    name:           name of the sensor
+    board:          name of the board on which the sensor is mounted
+    dut_position:   position of the sensor (1-5)
+    fluence:        radiation given to the sensor [units?]
+    transimpedance: transimpedance, depends on which board (to calculate charge) [units?]
+    voltage:        voltage of the sensor [V]
     """
     def __init__(self, name, board, dut_position, fluence, transimpedance, voltage):
         self.name = name
         self.board = board
         self.dut_position = dut_position
-        self.transimpedance = transimpedance
         self.fluence = fluence
+        self.transimpedance = transimpedance
         self.voltage = voltage
 
 
