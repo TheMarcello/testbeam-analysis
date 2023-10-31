@@ -28,8 +28,9 @@ class Batch:
         self.runs = runs
         self.tempA = temperatureA
         self.tempB = temperatrureB
-        self.S1 = S1
-        self.S2 = S2
+        self.S = {'S1':S1, 'S2':S2}
+        # self.S1 = S1
+        # self.S2 = S2
         
         
 class Oscilloscope:
