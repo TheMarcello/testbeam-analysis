@@ -412,7 +412,7 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
             
         case "2D_Tracks":        ### 2D tracks plots
             if fig_ax:  fig, axes = fig_ax
-            else:       fig, axes = plt.subplots(nrows=1, ncols=len(n_DUT), figsize=(15,6), sharex='all', sharey=False, dpi=200)
+            else:       fig, axes = plt.subplots(nrows=1, ncols=len(n_DUT), figsize=(6*len(n_DUT),10), sharex='all', sharey=False, dpi=200)
             if not bins: bins = (200,200)   ### default binning
             if len(n_DUT)==1: axes = axes[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case
             for i,dut in enumerate(n_DUT):
@@ -430,7 +430,7 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
                 secx.set_xlabel('mm', fontsize=20)
                 secy.set_ylabel('mm', fontsize=20)
             fig.tight_layout(w_pad=6, h_pad=4)
-            title_position = 1.15
+            title_position = 1.1
 
         case "pulseHeight":       ### PulseHeight plot
             if fig_ax:  fig, axes = fig_ax
@@ -450,7 +450,7 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
             
         case "2D_Sensors":        ### 2D tracks plots filtering some noise out (pulseHeight cut)
             if fig_ax:  fig, axes = fig_ax
-            else:       fig, axes = plt.subplots(nrows=2, ncols=len(n_DUT), figsize=(20,12), sharex=False, sharey=False, dpi=200)
+            else:       fig, axes = plt.subplots(nrows=2, ncols=len(n_DUT), figsize=(6*len(n_DUT),10), sharex=False, sharey=False, dpi=200)
             if not bins: bins = (200,200)   ### default binning
             fig.tight_layout(w_pad=6, h_pad=4)
             if len(n_DUT)==1: axes = axes[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case
@@ -488,7 +488,7 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
                     case other: print(f"invalid argument: {other}")
             coord = ['X','Y']
             if fig_ax:  fig, axes = fig_ax
-            else:       fig, axes = plt.subplots(nrows=2, ncols=len(n_DUT), figsize=(20,12), sharex=False, sharey=False, dpi=200)
+            else:       fig, axes = plt.subplots(nrows=2, ncols=len(n_DUT), figsize=(6*len(n_DUT),10), sharex=False, sharey=False, dpi=200)
             if not bins: bins = (200)       ### default binning
             fig.tight_layout(w_pad=6, h_pad=10)
             if len(n_DUT)==1: axes = axes[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case
@@ -509,6 +509,8 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
                                 label=f"error: {sigma_coeff}$\sigma$")
                     if sensors: plot_title = f"{XY} axis projection, Ch{dut+1} \n({sensors[f'Ch{dut+1}']})"
                     else:       plot_title = f"{XY} axis projection, Ch{dut+1}"
+                    efficiency_bar = 0.95 ### horizontal line at this efficiency %
+                    axes[coord_idx,i].axhline(efficiency_bar, label=f"{efficiency_bar*100}% efficiency", color='r', alpha=0.4, linewidth=2)
                     axes[coord_idx,i].set_title(plot_title, fontsize=24, y=1.05)
                     axes[coord_idx,i].set_xlabel(f"{XY} position (pixels)", fontsize=20)
                     axes[coord_idx,i].set_ylabel("Efficiency", fontsize=20)
@@ -518,10 +520,10 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
 
         case "2D_Efficiency":
             if fig_ax:  fig, axes = fig_ax
-            else:       fig, axes = plt.subplots(nrows=1, ncols=len(n_DUT), figsize=(15,6), sharex=False, sharey=True, dpi=200)
+            else:       fig, axes = plt.subplots(nrows=1, ncols=len(n_DUT), figsize=(6*len(n_DUT),6), sharex=False, sharey=True, dpi=200)
             if not bins: bins = (200,200)       ### default binning
             fig.tight_layout(w_pad=6, h_pad=6)
-            if len(n_DUT)==1: axes = axes[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case
+            if len(n_DUT)==1: axes = np.array(axes)[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case
             for key, value in kwrd_arg.items():
                 match key:
                     case 'threshold_charge': threshold_charge=value
@@ -540,8 +542,11 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
                 im = axes[i].imshow(efficiency_map.T, origin='lower', extent=[x_edges[0], x_edges[-1], y_edges[0], y_edges[-1]],
                         aspect='equal', vmin=0, vmax=100)
                 axes[i].grid('--')
-                axes[i].set_xlabel('X Position', fontsize=20)
-                axes[i].set_ylabel('Y Position', fontsize=20)
+                if sensors: plot_title = f"Ch{dut+1} ({sensors[f'Ch{dut+1}']})"
+                else:       plot_title = f"Ch{dut+1}"
+                axes[i].set_title(plot_title, fontsize=16)
+                axes[i].set_xlabel('X Position (pixels)', fontsize=20)
+                axes[i].set_ylabel('Y Position (pixels)', fontsize=20)
                 secx = axes[i].secondary_xaxis('top', functions=(lambda x: x*PIXEL_SIZE, lambda y: y*PIXEL_SIZE))
                 secy = axes[i].secondary_yaxis('right', functions=(lambda x: x*PIXEL_SIZE, lambda y: y*PIXEL_SIZE))
                 secx.set_xlabel('mm', fontsize=20)

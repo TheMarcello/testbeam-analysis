@@ -38,10 +38,15 @@ class Oscilloscope:
     ------------
     name:           name of the oscilloscope ('S1' or 'S2' usually)
     channels:       dictionary of the 4 channels: {'Ch1':sensor1, etc.}
+    ------------
+    add_sensor:     add a sensor to the specified channel
     """
-    def __init__(self, name, sensor1, sensor2, sensor3, sensor4): ### or **sensors ??? = {'Ch1':sensor1, 'Ch2':sensor2 etc.}
+    def __init__(self, name, sensor1=None, sensor2=None, sensor3=None, sensor4=None):
         self.name = name
         self.channels = {'Ch1':sensor1, 'Ch2':sensor2, 'Ch3':sensor3, 'Ch4':sensor4}
+    
+    def add_sensor(self, channel, sensor):
+        self.channels[channel] = sensor
 
         
 class Sensor:
