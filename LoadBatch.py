@@ -37,14 +37,14 @@ def get_transimpedance(batch, oscilloscope):
         if oscilloscope=="S1":   return (four_ch, four_ch, none)
         elif oscilloscope=="S2": return (none, none, none)
     elif batch>=300 and batch<400:
-        if oscilloscope=="S1":   return (four_ch, four_ch, single_ch)
+        if oscilloscope=="S1":   return (four_ch, four_ch, none)
         elif oscilloscope=="S2": return (single_ch, single_ch, four_ch)
     elif batch>=400 and batch<500:
         if oscilloscope=="S1":   return (four_ch, four_ch, four_ch)
         elif oscilloscope=="S2": return (single_ch, single_ch, single_ch)
     elif batch>=500 and batch<600:
         if oscilloscope=="S1":   return (single_ch, single_ch, single_ch)
-        elif oscilloscope=="S2": return (single_ch, single_ch, single_ch)
+        elif oscilloscope=="S2": return (single_ch, single_ch, none)
     elif batch>=600 and batch<700:
         if oscilloscope=="S1":   return (four_ch, four_ch, four_ch)
         elif oscilloscope=="S2": return (single_ch, single_ch, four_ch)
@@ -72,6 +72,7 @@ def get_transimpedance(batch, oscilloscope):
     else:     ### last case, return all none
         if oscilloscope=="S1":   return (none, none, none)
         elif oscilloscope=="S2": return (none, none, none)
+
 
 def root_to_df(file_path, branches):
     """
