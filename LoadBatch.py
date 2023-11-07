@@ -21,6 +21,29 @@ from wrapt_timeout_decorator import timeout
 PIXEL_SIZE = 0.0185 #mm
 
 
+def load_batch(batch_number, oscilloscope, branches=["eventNumber", "Xtr", "Ytr", "pulseHeight", "charge", "timeCFD20", "timeCFD50", "timeCFD70"],
+              data_path=f"../Data_TestBeam/2023_May/"):
+    """"
+    Load all the data from the .root file of one batch and one oscilloscope into a pandas.Dataframe. \n
+    Parameters
+    ----------
+    batch_number:       number of the batch
+    oscilloscope:       string for oscilloscope: 'S1' or 'S2'
+    branches:           branches of the data of the .root file to load (not all, so it's lighter)
+    data_path:          default path of the directory where to find the data (of both oscilloscopes)
+    
+    Returns
+    -------
+    df:                 pandas.Dataframe with all the required data
+    """
+    columns_to_remove = ["Xtr_4","Xtr_5","Xtr_6","Xtr_7","Ytr_4","Ytr_5","Ytr_6","Ytr_7"]    
+    print("Batch:", batch_number, "\t Oscilloscope", oscilloscope)
+    dir_path = os.path.join(data_path,oscilloscope)
+    file_path = f"tree_May2023_{oscilloscope}_{batch_number}.root"    
+    df = root_to_df(os.path.join(dir_path, file_path), branches)
+    df = df.drop(columns=columns_to_remove)
+    return df
+
 ### pretty ugly but no alternatives right now
 def get_transimpedance(batch, oscilloscope):
     """
@@ -384,7 +407,8 @@ def read_pickle(file):
 
 def geometry_mask(df, bins, bins_find_min, DUT_number, only_center=False):
     """
-    Creates a boolean mask for selecting the 2D shape of the sensor
+    Creates a boolean mask for selecting the 2D shape of the sensor.
+    If the minimum of the pulseHeight could not be found it returns all True
 
     Parameters
     ----------
@@ -502,7 +526,7 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
             axes.legend(fontsize=20)
             title_position = 1.15
             
-        case "2D_Sensors":        ### 2D tracks plots filtering some noise out (pulseHeight cut)
+        case "2D_Sensors":        ### 2D tracks plots filtering noise out (also include pulseHeight plot)
             if fig_ax:  fig, axes = fig_ax
             else:       fig, axes = plt.subplots(nrows=2, ncols=len(n_DUT), figsize=(6*len(n_DUT),10), sharex=False, sharey=False, dpi=200)
             if not bins: bins = (200,200)   ### default binning
@@ -610,7 +634,7 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
 
         case other:
             print("""No plot_type found, options are:
-            '2D_Tracks', '1D_Tracks', 'pulseHeight', '2D_Sensors' """)
+            '1D_Tracks', '2D_Tracks', 'pulseHeight', '2D_Sensors', '1D_Efficiency', '2D_Efficiency' """)
             return
     
     fig.suptitle(f"{plot_type}, batch: {batch} {savefig_details}", fontsize=24, y=title_position)
