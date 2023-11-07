@@ -37,10 +37,14 @@ def load_batch(batch_number, oscilloscope, branches=["eventNumber", "Xtr", "Ytr"
     df:                 pandas.Dataframe with all the required data
     """
     columns_to_remove = ["Xtr_4","Xtr_5","Xtr_6","Xtr_7","Ytr_4","Ytr_5","Ytr_6","Ytr_7"]    
-    print("Batch:", batch_number, "\t Oscilloscope", oscilloscope)
+    print("Loading batch:", batch_number, "\t Oscilloscope", oscilloscope)
     dir_path = os.path.join(data_path,oscilloscope)
-    file_path = f"tree_May2023_{oscilloscope}_{batch_number}.root"    
-    df = root_to_df(os.path.join(dir_path, file_path), branches)
+    file_path = f"tree_May2023_{oscilloscope}_{batch_number}.root"
+    try:
+        df = root_to_df(os.path.join(dir_path, file_path), branches)
+    except:
+        print(f"File not found (or other error)")
+        return
     df = df.drop(columns=columns_to_remove)
     return df
 
@@ -441,7 +445,7 @@ def geometry_mask(df, bins, bins_find_min, DUT_number, only_center=False):
     bool_geometry = np.logical_and(xgeometry, ygeometry)
     return bool_geometry
 
-
+### I probably should pass a Batch class object for the plotting, it would contain sensor names, transimpedance, 
 def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice', n_DUT=[1,2,3], mask=None, no_geometry_cut=True, only_center=False,
          savefig=False, savefig_path='../various plots', savefig_details='', fig_ax=None,
          **kwrd_arg):
@@ -451,10 +455,12 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
     ----------
     df:             FULL dataframe of the data to plot (each plot_type select the data it needs)
     plot_type:      type of plot, options are:
-                        '2D_Tracks':    2D plot of the reconstructed tracks
                         '1D_Tracks':    histogram of reconstructed tracks distribution (Xtr and Ytr)
+                        '2D_Tracks':    2D plot of the reconstructed tracks
                         'pulseHeight':  histogram of the pulseHeight of all channels (log scale)
                         '2D_Sensors':   pulseHeight cut plot + 2D plot of tracks with cut (highlighting the sensors)
+                        '1D_Efficiency':
+                        '2D_Efficiency':
     batch:          batch number
     sensors:        dictionary of the sensors in this batch
     bins:           binning options, (int,int) or (bin_edges_list, bin_edges_list), different default for each plot_type
@@ -563,7 +569,7 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
                 match key:
                     case 'threshold_charge': threshold_charge=value
                     case 'transimpedance':   transimpedance=value
-                    case other: print(f"invalid argument: {other}")
+                    case other: print(f"W: invalid argument: {other}")
             coord = ['X','Y']
             if fig_ax:  fig, axes = fig_ax
             else:       fig, axes = plt.subplots(nrows=2, ncols=len(n_DUT), figsize=(6*len(n_DUT),10), sharex=False, sharey=False, dpi=200)
@@ -596,7 +602,7 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
                     axes[coord_idx,i].grid('--')
             title_position = 1.1
 
-        case "2D_Efficiency":
+        case "2D_Efficiency":   ### I would like to add a mask to the efficiency plot too
             if fig_ax:  fig, axes = fig_ax
             else:       fig, axes = plt.subplots(nrows=1, ncols=len(n_DUT), figsize=(6*len(n_DUT),6), sharex=False, sharey=True, dpi=200)
             if not bins: bins = (200,200)       ### default binning
@@ -608,7 +614,7 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
                     case 'transimpedance':   transimpedance=value
                     case other: print(f"invalid argument: {other}")
             for i,dut in enumerate(n_DUT):
-                if no_geometry_cut: bool_geometry = pd.Series(True,index=df.index)
+                if no_geometry_cut: bool_geometry = pd.Series(True,index=df.index)   # should probably be geometry_cut instead
                 else:    bool_geometry = geometry_mask(df, bins, bins_find_min, DUT_number=dut, only_center=only_center)    ### this is a boolean mask of the selected positions                
                 total_events_in_bin, x_edges, y_edges, _ = axes[i].hist2d(df[f"Xtr_{dut-1}"].loc[bool_geometry], df[f"Ytr_{dut-1}"].loc[bool_geometry], bins=bins)
                 events_above_threshold = df[f"charge_{dut}"].loc[bool_geometry]/transimpedance[dut-1] > threshold_charge
@@ -639,7 +645,9 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
     
     fig.suptitle(f"{plot_type}, batch: {batch} {savefig_details}", fontsize=24, y=title_position)
     plt.show()
-    if savefig: fig.savefig(f"{savefig_path}/{plot_type}_{batch}{savefig_details}.jpg", bbox_inches="tight")
+    if savefig: 
+        file_name = f"{plot_type}_{batch}{savefig_details}.jpg"
+        fig.savefig(os.path.join(savefig_path, file_name), bbox_inches="tight")
     return fig, axes
 
     # Efficiency Xtr Ytr
