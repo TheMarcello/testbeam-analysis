@@ -20,8 +20,9 @@ class Sensor:
     transimpedance: transimpedance, depends on which board (to calculate charge) [units?]
     voltage:        voltage of the sensor [V]
     """
-    def __init__(self, name, dut_position, transimpedance, voltage, board='boh', fluence=-1):
+    def __init__(self, name, dut_position, transimpedance, voltage, angle=0, board='no board', fluence=-1):
         self.name = name
+        self.angle = angle
         self.board = board
         self.dut_position = dut_position
         self.fluence = fluence
@@ -36,7 +37,7 @@ class Oscilloscope:
     name:           name of the oscilloscope ('S1' or 'S2' usually)
     channels:       dictionary of the 4 channels: {'Ch1':sensor1, etc.}
     ------------
-    add_sensor:     add a sensor to the specified channel
+    add_sensor:     add a Sensor to the specified channel
     """
     def __init__(self, name, sensor1=None, sensor2=None, sensor3=None, sensor4=None):
         self.name = name
@@ -51,22 +52,24 @@ class Batch:
     Batch class, includes all relevant information of the batch, such as
     ------------- 
     batch_number:   batch number
-    angle:          angle to the beam   [°degrees]
+    angle:          angle to the beam   [°degrees] ### I should put it into the sensor
     runs:           list of run numbers belonging to the same batch
     tempA:          temperature of thermometer A [°C]
     tempB:          temperature of thermometer B [°C]
     S1, S2:         Oscilloscope objects 1 and 2
+
+    get_fluence_boards():
     """
-    def __init__(self, batch_number, angle, runs, temperatureA, temperatureB, S1, S2):
+    def __init__(self, batch_number, angle, runs, temperatureA, temperatureB, S1, S2):#):
         self.batch_number = batch_number
         self.angle = angle
         self.runs = runs
         self.tempA = temperatureA
         self.tempB = temperatureB
         self.S = {'S1':S1, 'S2':S2}
-        self.get_fluence_and_boards()
+        self.get_fluence_boards()
 
-    def get_fluence_and_boards(self):
+    def get_fluence_boards(self):
         """
         Map of each board names for each batch
         same thing for the fluence
@@ -80,8 +83,9 @@ class Batch:
         none = ' '
         batch = self.batch_number        
         for S,scope in self.S.items():
-               ### default to zero because most of them are unirradiated
+               ### default to zero because most of them are unirradiated and not angled
             fluences = (0, 0, 0, 0)     
+            # angles = (0, 0, 0, 0)     ### I am not keeping this because it's inconsistent, I keep the RUNLOG angles
             ### maybe I can avoid some repetition
             if batch>=100 and batch<200:     ### Ch2      Ch3       Ch4
                 if S=="S1":     boards = (none, 'CERN-1','CERN-1','CERN-1')
@@ -111,33 +115,41 @@ class Batch:
                     fluences = (0, '8.00E+14', '2.50E+15', '1.50E+15')
             elif batch>=700 and batch<800:
                 if S=="S1":
+                    # angles = (0, 14, 14, 14)
                     boards = (none, 'CERN2', 'CERN2', 'CERN2')
                     fluences = (0, '1.50E+15', '1.50E+15', '1.50E+15')
                 elif S=="S2":  
+                    # angles = (0, 0, 0, 14)
                     boards = (none, none, none, 'CERN2')
                     fluences = (0, 0, 0, '1.50E+15')
             elif batch>=800 and batch<900:
                 if S=="S1": boards = (none, none, none, none)
                 elif S=="S2":  
+                    # angles = (0, 12.5, 14, 0)
                     boards = (none, 'JSI B7', 'JSI B6', none)
                     fluences = (0, '8.00E+14', '1E14 P', 0)
             elif batch>=900 and batch<1000:
                 if S=="S1": 
+                    # angles = (0, 12.5, 14, 0)
                     boards = (none, 'JSI PP4', 'JSI B13', none)
                     fluences = (0, '6.5E14 p', '2.50E+15', 0)
                 elif S=="S2":   boards= (none, none, none, none)
             elif batch>=1000 and batch<1100:
-                if S=="S1": 
+                if S=="S1":
+                    # angles = (0, 14, 14, 14)
                     boards = (none, 'CERN2', 'CERN2', 'CERN2')
                     fluences = (0, '1.50E+15', '1.50E+15', '1.50E+15')
-                elif S=="S2":   
+                elif S=="S2":
+                    # angles = (0, 12.5, 14, 14)
                     boards = (none, 'JSI B7', 'JSI B6', 'CERN2')
                     fluences = (0, '8.00E+14', '1E14 P', '1.50E+15')
             elif batch>=1100 and batch<1200:
                 if S=="S1":
+                    # angles = (0, 12.5, 14, 0)
                     boards = (none, 'JSI PP4', 'JSI B13', none)
                     fluences = (0, '6.5E14 p', '2.50E+15', 0)
-                elif S=="S2":   
+                elif S=="S2":
+                    # angles = (0, 12.5, 14, 0)
                     boards = (none, 'JSI B7', 'JSI B6', none)
                     fluences = (0, '8.00E+14', '1E14 P', 0)
             elif batch>=1200 and batch<1300:
