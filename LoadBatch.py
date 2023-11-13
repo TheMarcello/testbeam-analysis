@@ -448,7 +448,7 @@ def geometry_mask(df, bins, bins_find_min, DUT_number, only_center=False):
     return bool_geometry
 
 ### I probably should pass a Batch class object for the plotting, it would contain sensor names, transimpedance, 
-def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice', n_DUT=[1,2,3], mask=None, no_geometry_cut=True, only_center=False,
+def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice', n_DUT=[1,2,3], mask=None, geometry_cut=False, only_center=False,
          savefig=False, savefig_path='../various plots', savefig_details='', fig_ax=None,
          **kwrd_arg):
     """
@@ -468,7 +468,7 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
     bins:           binning options, (int,int) or (bin_edges_list, bin_edges_list), different default for each plot_type
     bins_find_min:  binning options for the find_min_btw_peaks function (in '2D_Sensors')  
     n_DUT:          number of devices under test (3 for each Scope for May 2023)
-    mask:           list of boolean masks to plot the 2D tracks where 'mask' is True (df['Xtr'].loc[mask[DUT]])
+    mask:           list of boolean arrays to plot the 2D tracks where 'mask' is True (i.e. df['Xtr'].loc[mask[DUT]])
     savefig:        boolean option to save the plot
     savefig_path:   folder where to save the plot
     savefig_details: optional details for the file name (e.g. distinguish cuts)
@@ -579,8 +579,8 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
             fig.tight_layout(w_pad=6, h_pad=10)
             if len(n_DUT)==1: axes = axes[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case
             for i,dut in enumerate(n_DUT): 
-                if no_geometry_cut: bool_mask = pd.Series(True,index=df.index)
-                else:       bool_mask = geometry_mask(df, bins, bins_find_min, DUT_number=dut)    ### this is a boolean mask of the selected positions                
+                if geometry_cut: bool_mask = geometry_mask(df, bins, bins_find_min, DUT_number=dut)    ### this is a boolean mask of the selected positions                
+                else:       bool_mask = pd.Series(True,index=df.index)
                 events_above_threshold = df[f"charge_{dut}"].loc[bool_mask]/transimpedance[dut-1] > threshold_charge
                 for coord_idx, XY in enumerate(coord):
                     above_threshold = np.logical_and(bool_mask, events_above_threshold)
@@ -616,8 +616,9 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
                     case 'transimpedance':   transimpedance=value
                     case other: print(f"invalid argument: {other}")
             for i,dut in enumerate(n_DUT):
-                if no_geometry_cut: bool_mask = pd.Series(True,index=df.index)   # should probably be geometry_cut instead
-                else:    bool_mask = geometry_mask(df, bins, bins_find_min, DUT_number=dut, only_center=only_center)    ### this is a boolean mask of the selected positions                
+                if mask:    bool_mask = mask[dut]
+                elif geometry_cut: bool_mask = geometry_mask(df, bins, bins_find_min, DUT_number=dut, only_center=only_center)    ### this is a boolean mask of the selected positions                
+                else:       bool_mask = pd.Series(True,index=df.index)   # should probably be geometry_cut instead
                 total_events_in_bin, x_edges, y_edges, _ = axes[i].hist2d(df[f"Xtr_{dut-1}"].loc[bool_mask], df[f"Ytr_{dut-1}"].loc[bool_mask], bins=bins)
                 events_above_threshold = df[f"charge_{dut}"].loc[bool_mask]/transimpedance[dut-1] > threshold_charge
                 above_threshold = np.logical_and(bool_mask, events_above_threshold)
