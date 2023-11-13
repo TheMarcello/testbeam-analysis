@@ -17,6 +17,8 @@ from scipy.stats import gaussian_kde
 # import copy
 from wrapt_timeout_decorator import timeout
 
+from SensorClasses import *
+
 
 PIXEL_SIZE = 0.0185 #mm
 
@@ -577,12 +579,12 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
             fig.tight_layout(w_pad=6, h_pad=10)
             if len(n_DUT)==1: axes = axes[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case
             for i,dut in enumerate(n_DUT): 
-                if no_geometry_cut: bool_geometry = pd.Series(True,index=df.index)
-                else:       bool_geometry = geometry_mask(df, bins, bins_find_min, DUT_number=dut)    ### this is a boolean mask of the selected positions                
-                events_above_threshold = df[f"charge_{dut}"].loc[bool_geometry]/transimpedance[dut-1] > threshold_charge
+                if no_geometry_cut: bool_mask = pd.Series(True,index=df.index)
+                else:       bool_mask = geometry_mask(df, bins, bins_find_min, DUT_number=dut)    ### this is a boolean mask of the selected positions                
+                events_above_threshold = df[f"charge_{dut}"].loc[bool_mask]/transimpedance[dut-1] > threshold_charge
                 for coord_idx, XY in enumerate(coord):
-                    above_threshold = np.logical_and(bool_geometry, events_above_threshold)
-                    total_events_in_bin, bins_edges, _, _, _ = plot_histogram(df[f"{XY}tr_{dut-1}"].loc[bool_geometry], bins=bins[coord_idx], fig_ax=(fig, axes[coord_idx,i]))
+                    above_threshold = np.logical_and(bool_mask, events_above_threshold)
+                    total_events_in_bin, bins_edges, _, _, _ = plot_histogram(df[f"{XY}tr_{dut-1}"].loc[bool_mask], bins=bins[coord_idx], fig_ax=(fig, axes[coord_idx,i]))
                     events_above_threshold_in_bin, _, _, _, _  = plot_histogram(df[f"{XY}tr_{dut-1}"].loc[above_threshold], bins=bins[coord_idx], fig_ax=(fig, axes[coord_idx,i]))
                     axes[coord_idx, i].clear()
                     bins_centers = (bins_edges[:-1]+bins_edges[1:])/2
@@ -614,11 +616,11 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
                     case 'transimpedance':   transimpedance=value
                     case other: print(f"invalid argument: {other}")
             for i,dut in enumerate(n_DUT):
-                if no_geometry_cut: bool_geometry = pd.Series(True,index=df.index)   # should probably be geometry_cut instead
-                else:    bool_geometry = geometry_mask(df, bins, bins_find_min, DUT_number=dut, only_center=only_center)    ### this is a boolean mask of the selected positions                
-                total_events_in_bin, x_edges, y_edges, _ = axes[i].hist2d(df[f"Xtr_{dut-1}"].loc[bool_geometry], df[f"Ytr_{dut-1}"].loc[bool_geometry], bins=bins)
-                events_above_threshold = df[f"charge_{dut}"].loc[bool_geometry]/transimpedance[dut-1] > threshold_charge
-                above_threshold = np.logical_and(bool_geometry, events_above_threshold)
+                if no_geometry_cut: bool_mask = pd.Series(True,index=df.index)   # should probably be geometry_cut instead
+                else:    bool_mask = geometry_mask(df, bins, bins_find_min, DUT_number=dut, only_center=only_center)    ### this is a boolean mask of the selected positions                
+                total_events_in_bin, x_edges, y_edges, _ = axes[i].hist2d(df[f"Xtr_{dut-1}"].loc[bool_mask], df[f"Ytr_{dut-1}"].loc[bool_mask], bins=bins)
+                events_above_threshold = df[f"charge_{dut}"].loc[bool_mask]/transimpedance[dut-1] > threshold_charge
+                above_threshold = np.logical_and(bool_mask, events_above_threshold)
                 events_above_threshold_in_bin, _, _, _ = axes[i].hist2d(df[f"Xtr_{dut-1}"].loc[above_threshold], df[f"Ytr_{dut-1}"].loc[above_threshold], bins=bins)
                 efficiency_map = np.divide(events_above_threshold_in_bin, total_events_in_bin, where=total_events_in_bin!=0,
                                         out=np.zeros_like(events_above_threshold_in_bin))*100 # in percentage
