@@ -461,6 +461,11 @@ def geometry_mask(df, bins, bins_find_min, DUT_number, only_center=False):
     return bool_geometry
 
 
+def my_gauss(x, A, mu, sigma, background):
+    """Custom normal distribution function + uniform background"""
+    return A * np.exp(-0.5*((x-mu)/sigma)**2) + background
+
+
 def time_mask(df, DUT_number, bins=10000, CFD_MCP=20, p0=None, sigmas=5, plot=True):
     """
     Creates a boolean mask using a gaussian+background fit of the time difference between DUT and MCP.
