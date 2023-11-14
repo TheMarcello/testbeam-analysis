@@ -4,6 +4,7 @@ import matplotlib.pylab as plt # Matplotlib plots
 import pandas as pd # Pandas
 import uproot
 import pickle
+import logging
 
 # import awkward as ak
 # import mplhep as hep
@@ -38,14 +39,16 @@ def load_batch(batch_number, oscilloscope, branches=["eventNumber", "Xtr", "Ytr"
     -------
     df:                 pandas.Dataframe with all the required data
     """
-    columns_to_remove = ["Xtr_4","Xtr_5","Xtr_6","Xtr_7","Ytr_4","Ytr_5","Ytr_6","Ytr_7"]    
-    print("Loading batch:", batch_number, "\t Oscilloscope", oscilloscope)
+    columns_to_remove = ["Xtr_4","Xtr_5","Xtr_6","Xtr_7","Ytr_4","Ytr_5","Ytr_6","Ytr_7"]
+    logging.info(f"Loading batch {batch_number} \t Oscilloscope {oscilloscope}")    
+    # print("Loading batch:", batch_number, "\t Oscilloscope", oscilloscope)
     dir_path = os.path.join(data_path,oscilloscope)
     file_path = f"tree_May2023_{oscilloscope}_{batch_number}.root"
     try:
         df = root_to_df(os.path.join(dir_path, file_path), branches)
-    except:
-        print(f"File not found (or other error)")
+    except FileNotFoundError:
+        logging.error("Batch file not found")
+        # print(f"File not found (or other error)")
         return
     df = df.drop(columns=columns_to_remove)
     return df
@@ -231,11 +234,13 @@ def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, pl
         try:
             smoothed_hist = time_limited_kde_evaluate(kde, bins_centers) * density_factor 
         except:          ### now take only half of the points to be evaluated
-            print(f"Evaluating kde timeout n°: {i+1}. Trying with 1/2 number of points")
+            logging.info(f"Evaluating kde timeout n°: {i+1}. Trying with 1/2 number of points")
+            # print(f"Evaluating kde timeout n°: {i+1}. Trying with 1/2 number of points")
             bins_centers = bins_centers[::2] 
             density_factor = density_factor[::2]
             if i==(number_of_tries-1):
-                print("Giving up evaluating kde")
+                logging.warning("Giving up evaluating kde")
+                # print("Giving up evaluating kde")
                 return None
         else:
             break
@@ -257,23 +262,26 @@ def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, pl
             local_min, info_min = find_peaks(-smoothed_hist[peaks_idx[0]:peaks_idx[1]], prominence=min_prominence)
             
         else:    ### if it doesn't work it's because only one peak was found
-            # print(f"Two peaks not found, retrying...")
+            logging.info("Two peaks not found, retrying")
             recursion_depth += 1
             if recursion_depth==max_recursion:
-                print(f"Two PEAKS not found after {recursion_depth} iterations \n INFO :{info_peaks}")
+                logging.warning(f"Two PEAKS not found after {recursion_depth} iterations")
+                logging.info(": {info_peaks}")
+                # print(f"Two PEAKS not found after {recursion_depth} iterations \n info :{info_peaks}")
                 return None
             peak_prominence *= 0.5    ### reduce prominence if the peaks are not found
             continue
         if len(local_min)==1:
             break
         elif len(local_min)>1:
-            print(f"More than one minimum found at: {[bins_centers[min_idx+peaks_idx[0]] for min_idx in local_min]}")
+            logging.warning(f"More than one minimum found at: {[bins_centers[min_idx+peaks_idx[0]] for min_idx in local_min]}")
+            # print(f"More than one minimum found at: {[bins_centers[min_idx+peaks_idx[0]] for min_idx in local_min]}")
             break
         elif len(local_min)==0:
             recursion_depth += 1
-            # print(f"No minimum found, retrying...")
             if recursion_depth==max_recursion:
-                print(f"No MIN found after {recursion_depth} iterations")# \n INFO :{info_min}")
+                logging.warning(f"No MIN found after {recursion_depth} iterations")
+                # print(f"No MIN found after {recursion_depth} iterations")# \n info :{info_min}")
                 return None
             min_prominence *= 0.5       ### reduce prominence if the min is not found
 
@@ -310,7 +318,8 @@ def find_edges(data, bins='rice', use_kde=True, plot=False):
         try:
             values = time_limited_kde_evaluate(kde, bins_centers)*density_factor
         except:
-            print("W: in 'find_edges()': KDE timed out, using normal hist")
+            logging.warning("in 'find_edges()': KDE timed out, using normal hist")
+            # print("W: in 'find_edges()': KDE timed out, using normal hist")
             values = hist
     else:
         values = hist
@@ -323,9 +332,8 @@ def find_edges(data, bins='rice', use_kde=True, plot=False):
 def extend_edges(left_edge, right_edge, fraction= 0.2):
     """Just increase the s
     """
-    # if left_edge>right_edge:
-    #     print("E: in 'extend_edges()', left_edge > right_edge")
-    #     return
+    if left_edge>right_edge:
+        logging.warning("in 'extend_edges()', left_edge > right_edge")
     extra_edge = (right_edge-left_edge)*fraction
     return left_edge-extra_edge, right_edge+extra_edge
 
@@ -433,7 +441,8 @@ def geometry_mask(df, bins, bins_find_min, DUT_number, only_center=False):
         left_edge, right_edge = find_edges(Xtr_cut, bins=bins[0], use_kde=False, plot=False)
         bottom_edge, top_edge = find_edges(Ytr_cut, bins=bins[1], use_kde=False, plot=False)
     except:
-        print("W: in 'geometry_mask()', something wrong, no boolean mask")
+        # print("W: in 'geometry_mask()', something wrong, no boolean mask")
+        logging.warning("in 'geometry_mask()', something wrong, no boolean mask")
         return pd.Series(True, index=df.index)  ### return all True array if there is no minimum
     if only_center:
         central_edge = 0.5 / 2 # 0.5mm / 2
@@ -448,7 +457,7 @@ def geometry_mask(df, bins, bins_find_min, DUT_number, only_center=False):
     return bool_geometry
 
 ### I probably should pass a Batch class object for the plotting, it would contain sensor names, transimpedance, 
-def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice', n_DUT=[1,2,3], mask=None, geometry_cut=False, only_center=False,
+def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice', n_DUT=None, mask=None, geometry_cut=False, only_center=False,
          savefig=False, savefig_path='../various plots', savefig_details='', fig_ax=None,
          **kwrd_arg):
     """
@@ -477,6 +486,8 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
     -------
     fig, axes:        figure and axis objects so that more manipulation can be done
     """
+    if n_DUT is None:
+        n_DUT = [1,2,3]
     match plot_type:
         case "1D_Tracks":        ### 1D tracks plots
             if fig_ax:  fig, axes = fig_ax
@@ -547,7 +558,8 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
                 axes[0,i].set_xlabel('mV')
                 axes[0,i].set_ylabel('Events')
                 if not minimum:
-                    print("No minimum found, no 2D plot")
+                    logging.warning("in '2D_Sensors', No minimum found, no 2D plot")
+                    # print("No minimum found, no 2D plot")
                     axes[0,i].set_title(f"Ch{dut+1} \n({sensors[f'Ch{dut+1}']})")
                     continue
                 if sensors: plot_title = f"Ch{dut+1}, "+"cut: %.1f"%minimum+f"mV \n({sensors[f'Ch{dut+1}']})"
@@ -571,7 +583,7 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
                 match key:
                     case 'threshold_charge': threshold_charge=value
                     case 'transimpedance':   transimpedance=value
-                    case other: print(f"W: invalid argument: {other}")
+                    case other: logging.warning(f"invalid argument: {other}") #print(f"W: invalid argument: {other}")
             coord = ['X','Y']
             if fig_ax:  fig, axes = fig_ax
             else:       fig, axes = plt.subplots(nrows=2, ncols=len(n_DUT), figsize=(6*len(n_DUT),10), sharex=False, sharey=False, dpi=200)
@@ -614,7 +626,7 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
                 match key:
                     case 'threshold_charge': threshold_charge=value
                     case 'transimpedance':   transimpedance=value
-                    case other: print(f"invalid argument: {other}")
+                    case other: logging.warning(f"invalid argument: {other}") # print(f"invalid argument: {other}")
             for i,dut in enumerate(n_DUT):
                 if mask:    bool_mask = mask[dut]
                 elif geometry_cut: bool_mask = geometry_mask(df, bins, bins_find_min, DUT_number=dut, only_center=only_center)    ### this is a boolean mask of the selected positions                
@@ -642,8 +654,10 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
             fig.colorbar(im, ax=axes.ravel().tolist(), label="Efficiency (%)")
 
         case other:
-            print("""No plot_type found, options are:
+            logging.error("""No plot_type found, options are:
             '1D_Tracks', '2D_Tracks', 'pulseHeight', '2D_Sensors', '1D_Efficiency', '2D_Efficiency' """)
+            # print("""No plot_type found, options are:
+            # '1D_Tracks', '2D_Tracks', 'pulseHeight', '2D_Sensors', '1D_Efficiency', '2D_Efficiency' """)
             return
     
     fig.suptitle(f"{plot_type}, batch: {batch} {savefig_details}", fontsize=24, y=title_position)
