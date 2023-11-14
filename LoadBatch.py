@@ -11,7 +11,7 @@ import logging
 # import argparse     # to get arguments from command line executing file.py
 import os # read directories etc.
 from scipy.signal import find_peaks, gaussian
-# from scipy.optimize import curve_fit
+from scipy.optimize import curve_fit
 from scipy.stats import gaussian_kde
 # import pylandau
 # import re
@@ -430,7 +430,11 @@ def geometry_mask(df, bins, bins_find_min, DUT_number, only_center=False):
     bins:           bins options for  "Xtr" and "Ytr"
     bins_find_min:  bins options for 'find_min_btw_peaks()'
     DUT_number:     number of the DUT (1,2,3), corresponding to Channels 2,3,4
-    only_center:   bool, if the geometry mask should be the central 0.5x0.5 mm^2 of the sensor
+    only_center:    bool, if the geometry mask should be the central 0.5x0.5 mm^2 of the sensor
+   
+    Returns
+    -------
+    bool_geometry:  boolean mask of the events inside the geometry cut
     """
     i = DUT_number-1 ### index of the DUT
     try:    
@@ -455,6 +459,44 @@ def geometry_mask(df, bins, bins_find_min, DUT_number, only_center=False):
     ygeometry = np.logical_and(df[f"Ytr_{i}"]>bottom_edge, df[f"Ytr_{i}"]<top_edge)
     bool_geometry = np.logical_and(xgeometry, ygeometry)
     return bool_geometry
+
+
+def time_mask(df, DUT_number, bins=10000, CFD_MCP=20, p0=None, sigmas=5, plot=True):
+    """
+    Creates a boolean mask using a gaussian+background fit of the time difference between DUT and MCP.
+
+    Parameters
+    ----------
+    df:         dataframe containing the 'timeCFD50_dut' and 'timeCFD20_0'
+    DUT_number: number of the selected dut for the time_mask filter
+    bins:       binning options for the time difference
+    CFD_MCP:    constant fraction discriminator for the MCP, possibles are: 20,50,70 (percentage)
+    p0:         initial parameters for the gaussian fit
+    sigmas:     number of sigmas from the center to include in the time cut
+    plot:       boolean, if False plt.close() is called so that no plot is showed
+
+    Returns
+    -------
+    time_cut:   boolean mask of the events within the calculated time frame  
+    """
+    dut = DUT_number
+    hist,my_bins,_,_,_ = plot_histogram((df[f"timeCFD50_{dut}"]-df[f"timeCFD{CFD_MCP}_0"]), bins=bins)
+    if p0 is None: p0 = (np.max(hist), -5e3, 100, np.average(hist))
+    bins_centers = (my_bins[:-1]+my_bins[1:])/2
+    ### maybe I should add a try except
+    param, covar = curve_fit(my_gauss, bins_centers, hist, p0=p0)
+    logging.info(f"in 'time_mask()': Fit parameters {param}")
+    left_base, right_base = param[1]-sigmas*param[2], param[1]+sigmas*param[2]
+    left_cut = (df[f"timeCFD50_{dut}"]-df[f"timeCFD{CFD_MCP}_0"])>left_base
+    right_cut = (df[f"timeCFD50_{dut}"]-df[f"timeCFD{CFD_MCP}_0"])<right_base
+    time_cut = np.logical_and(left_cut, right_cut)
+    plt.xlim(param[1]-100*param[2], param[1]+100*param[2])
+    plt.plot(bins_centers, my_gauss(bins_centers,*param), color='k')
+    if not plot:
+        logging.warning("in time_mask() plot has been closed")
+        plt.close()
+    return time_cut #, info ###?? this could be a dictionary with the fit parameter values or similar info
+    
 
 ### I probably should pass a Batch class object for the plotting, it would contain sensor names, transimpedance, 
 def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice', n_DUT=None, mask=None, geometry_cut=False, only_center=False,
