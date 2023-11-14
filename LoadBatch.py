@@ -492,7 +492,7 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
         case "1D_Tracks":        ### 1D tracks plots
             if fig_ax:  fig, axes = fig_ax
             else:       fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(15,6), dpi=200, sharey='all')
-            if not bins: bins = (200,200)   ### default binning
+            if bins is None: bins = (200,200)   ### default binning
             for dut in n_DUT:
                 if sensors: sensor_label=f"sensor: {sensors[f'Ch{dut+1}']}"
                 else:       sensor_label=f"Ch{dut+1}"
@@ -510,7 +510,7 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
         case "2D_Tracks":        ### 2D tracks plots
             if fig_ax:  fig, axes = fig_ax
             else:       fig, axes = plt.subplots(nrows=1, ncols=len(n_DUT), figsize=(6*len(n_DUT),10), sharex='all', sharey=False, dpi=200)
-            if not bins: bins = (200,200)   ### default binning
+            if bins is None: bins = (200,200)   ### default binning
             if len(n_DUT)==1: axes = axes[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case
             for i,dut in enumerate(n_DUT):
                 if mask:  hist, _, _, _, = axes[i].hist2d(df[f"Xtr_{dut-1}"].loc[mask[dut-1]], df[f"Ytr_{dut-1}"].loc[mask[dut-1]], bins=bins, **kwrd_arg)
@@ -532,7 +532,7 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
         case "pulseHeight":       ### PulseHeight plot
             if fig_ax:  fig, axes = fig_ax
             else:       fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(15,10), dpi=200)
-            if not bins: bins = 'rice'
+            if bins is None: bins = 'rice'
             for i in n_DUT.insert(0,0):
                 if sensors: sensor_label=f"sensor: {sensors[f'Ch{i+1}']}"
                 else:       sensor_label=f'Ch{i+1}'
@@ -548,7 +548,7 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
         case "2D_Sensors":        ### 2D tracks plots filtering noise out (also include pulseHeight plot)
             if fig_ax:  fig, axes = fig_ax
             else:       fig, axes = plt.subplots(nrows=2, ncols=len(n_DUT), figsize=(6*len(n_DUT),10), sharex=False, sharey=False, dpi=200)
-            if not bins: bins = (200,200)   ### default binning
+            if bins is None: bins = (200,200)   ### default binning
             fig.tight_layout(w_pad=6, h_pad=4)
             if len(n_DUT)==1: axes = axes[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case
             for i,dut in enumerate(n_DUT): 
@@ -587,7 +587,7 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
             coord = ['X','Y']
             if fig_ax:  fig, axes = fig_ax
             else:       fig, axes = plt.subplots(nrows=2, ncols=len(n_DUT), figsize=(6*len(n_DUT),10), sharex=False, sharey=False, dpi=200)
-            if not bins: bins = (200)       ### default binning
+            if bins is None: bins = (200)       ### default binning
             fig.tight_layout(w_pad=6, h_pad=10)
             if len(n_DUT)==1: axes = axes[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case
             for i,dut in enumerate(n_DUT): 
@@ -619,7 +619,7 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
         case "2D_Efficiency":   ### I would like to add a mask to the efficiency plot too
             if fig_ax:  fig, axes = fig_ax
             else:       fig, axes = plt.subplots(nrows=1, ncols=len(n_DUT), figsize=(6*len(n_DUT),6), sharex=False, sharey=True, dpi=200)
-            if not bins: bins = (200,200)       ### default binning
+            if bins is None: bins = (200,200)       ### default binning
             fig.tight_layout(w_pad=6, h_pad=6)
             if len(n_DUT)==1: axes = np.array(axes)[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case
             for key, value in kwrd_arg.items():
