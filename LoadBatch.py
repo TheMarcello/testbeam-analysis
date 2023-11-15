@@ -508,7 +508,7 @@ def time_mask(df, DUT_number, bins=10000, CFD_MCP=20, p0=None, sigmas=5, plot=Tr
 
 ### I probably should pass a Batch class object for the plotting, it would contain sensor names, transimpedance, 
 def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice', n_DUT=None, mask=None, geometry_cut=False, only_center=False,
-         savefig=False, savefig_path='../various plots', savefig_details='', fig_ax=None,
+         fig_ax=None, savefig=False, savefig_path='../various plots', savefig_details='', fmt='svg',
          **kwrd_arg):
     """
     Function to produce the plots \n
@@ -637,10 +637,8 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
             if bins is None: bins = (200)       ### default binning
             coord = ['X','Y']
             if len(n_DUT)==1: axes = axes[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case
-            if geometry_cut:   
-                geo_mask = []      ### I have to add an extra loop outside because geometry_mask calls plt.close()
-                for i,dut in enumerate(n_DUT):    
-                    geo_mask.insert(dut-1,geometry_mask(df, bins, bins_find_min, DUT_number=dut))
+            if geometry_cut:   ### I have to add an extra loop outside because geometry_mask calls plt.close()
+                geo_mask = [geometry_mask(df, bins, bins_find_min, DUT_number=dut) for dut in n_DUT]      
 
             if fig_ax:  fig, axes = fig_ax
             else:       fig, axes = plt.subplots(nrows=2, ncols=len(n_DUT), figsize=(6*len(n_DUT),10), sharex=False, sharey=False, dpi=200)
@@ -648,7 +646,7 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
             
             for i,dut in enumerate(n_DUT):
                 if geometry_cut and mask: bool_mask = np.logical_and(mask[dut-1],geo_mask[dut-1])
-                elif geometry_cut:  bool_mask =  geo_mask[dut-1]  ### this is a boolean mask of the selected positions                
+                elif geometry_cut:  bool_mask = geo_mask[dut-1]  ### this is a boolean mask of the selected positions                
                 elif mask:          bool_mask = mask[dut-1]
                 else:       bool_mask = pd.Series(True,index=df.index)
                 events_above_threshold = df[f"charge_{dut}"].loc[bool_mask]/transimpedance[dut-1] > threshold_charge
@@ -721,7 +719,7 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
     fig.suptitle(f"{plot_type}, batch: {batch} {savefig_details}", fontsize=24, y=title_position)
     plt.show()
     if savefig: 
-        file_name = f"{plot_type}_{batch}{savefig_details}.svg"
+        file_name = f"{plot_type}_{batch}{savefig_details}.{fmt}"
         fig.savefig(os.path.join(savefig_path, file_name), bbox_inches="tight")
     return fig, axes
 
