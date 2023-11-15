@@ -290,8 +290,10 @@ def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, pl
     ax.plot(x_min, smoothed_hist[local_min[0]+peaks_idx[0]], 'o', markersize=10, color='r',
             label='Mimimum: %.1f'%x_min, alpha=.7)
     ax.legend(fontsize=16)
-    if savefig: fig.savefig(f"{savefig_path}find_min_btw_peaks{savefig_details}.jpg")
-    if not plot: plt.close()
+    if savefig: fig.savefig(f"{savefig_path}find_min_btw_peaks{savefig_details}.svg")
+    if not plot:
+        plt.close()
+        logging.warning('in find_min_btw_peaks(), closing plots')
     return  x_min 
 
 
@@ -632,14 +634,22 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
                     case 'threshold_charge': threshold_charge=value
                     case 'transimpedance':   transimpedance=value
                     case other: logging.warning(f"invalid argument: {other}") #print(f"W: invalid argument: {other}")
+            if bins is None: bins = (200)       ### default binning
             coord = ['X','Y']
+            if len(n_DUT)==1: axes = axes[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case
+            if geometry_cut:   
+                geo_mask = []      ### I have to add an extra loop outside because geometry_mask calls plt.close()
+                for i,dut in enumerate(n_DUT):    
+                    geo_mask.insert(dut-1,geometry_mask(df, bins, bins_find_min, DUT_number=dut))
+
             if fig_ax:  fig, axes = fig_ax
             else:       fig, axes = plt.subplots(nrows=2, ncols=len(n_DUT), figsize=(6*len(n_DUT),10), sharex=False, sharey=False, dpi=200)
-            if bins is None: bins = (200)       ### default binning
             fig.tight_layout(w_pad=6, h_pad=10)
-            if len(n_DUT)==1: axes = axes[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case
-            for i,dut in enumerate(n_DUT): 
-                if geometry_cut: bool_mask = geometry_mask(df, bins, bins_find_min, DUT_number=dut)    ### this is a boolean mask of the selected positions                
+            
+            for i,dut in enumerate(n_DUT):
+                if geometry_cut and mask: bool_mask = np.logical_and(mask[dut-1],geo_mask[dut-1])
+                elif geometry_cut:  bool_mask =  geo_mask[dut-1]  ### this is a boolean mask of the selected positions                
+                elif mask:          bool_mask = mask[dut-1]
                 else:       bool_mask = pd.Series(True,index=df.index)
                 events_above_threshold = df[f"charge_{dut}"].loc[bool_mask]/transimpedance[dut-1] > threshold_charge
                 for coord_idx, XY in enumerate(coord):
@@ -676,7 +686,7 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
                     case 'transimpedance':   transimpedance=value
                     case other: logging.warning(f"invalid argument: {other}") # print(f"invalid argument: {other}")
             for i,dut in enumerate(n_DUT):
-                if mask:    bool_mask = mask[dut]
+                if mask:    bool_mask = mask[dut-1]
                 elif geometry_cut: bool_mask = geometry_mask(df, bins, bins_find_min, DUT_number=dut, only_center=only_center)    ### this is a boolean mask of the selected positions                
                 else:       bool_mask = pd.Series(True,index=df.index)   # should probably be geometry_cut instead
                 total_events_in_bin, x_edges, y_edges, _ = axes[i].hist2d(df[f"Xtr_{dut-1}"].loc[bool_mask], df[f"Ytr_{dut-1}"].loc[bool_mask], bins=bins)
@@ -711,7 +721,7 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
     fig.suptitle(f"{plot_type}, batch: {batch} {savefig_details}", fontsize=24, y=title_position)
     plt.show()
     if savefig: 
-        file_name = f"{plot_type}_{batch}{savefig_details}.jpg"
+        file_name = f"{plot_type}_{batch}{savefig_details}.svg"
         fig.savefig(os.path.join(savefig_path, file_name), bbox_inches="tight")
     return fig, axes
 
