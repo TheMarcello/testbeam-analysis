@@ -482,7 +482,8 @@ def time_mask(df, DUT_number, bins=10000, CFD_MCP=20, p0=None, sigmas=5, plot=Tr
 
     Returns
     -------
-    time_cut:   boolean mask of the events within the calculated time frame  
+    time_cut:   boolean mask of the events within the calculated time frame 
+
     """
     dut = DUT_number
     hist,my_bins,_,_,_ = plot_histogram((df[f"timeCFD50_{dut}"]-df[f"timeCFD{CFD_MCP}_0"]), bins=bins)
@@ -491,16 +492,16 @@ def time_mask(df, DUT_number, bins=10000, CFD_MCP=20, p0=None, sigmas=5, plot=Tr
     ### maybe I should add a try except
     param, covar = curve_fit(my_gauss, bins_centers, hist, p0=p0)
     logging.info(f"in 'time_mask()': Fit parameters {param}")
-    left_base, right_base = param[1]-sigmas*param[2], param[1]+sigmas*param[2]
+    left_base, right_base = param[1]-sigmas*np.abs(param[2]), param[1]+sigmas*np.abs(param[2])
     left_cut = (df[f"timeCFD50_{dut}"]-df[f"timeCFD{CFD_MCP}_0"])>left_base
     right_cut = (df[f"timeCFD50_{dut}"]-df[f"timeCFD{CFD_MCP}_0"])<right_base
     time_cut = np.logical_and(left_cut, right_cut)
-    plt.xlim(param[1]-100*param[2], param[1]+100*param[2])
+    plt.xlim(param[1]-100*np.abs(param[2]), param[1]+100*np.abs(param[2]))
     plt.plot(bins_centers, my_gauss(bins_centers,*param), color='k')
     if not plot:
         logging.warning("in time_mask() plot has been closed")
         plt.close()
-    return time_cut #, info ###?? this could be a dictionary with the fit parameter values or similar info
+    return time_cut, {'parameters':param, 'covariance':covar} #, info ###?? this could be a dictionary with the fit parameter values or similar info
     
 
 ### I probably should pass a Batch class object for the plotting, it would contain sensor names, transimpedance, 
