@@ -315,7 +315,7 @@ def find_edges(data, bins='rice', use_kde=True, plot=False):
     hist, bins_points, _ = plt.hist(data, bins=bins, histtype='step')
     bins_centers = (bins_points[1:]+bins_points[:-1])/2
     if use_kde:
-        kde = gaussian_kde(hist)
+        kde = gaussian_kde(data)
         density_factor = sum(hist)*np.diff(bins_points)
         try:
             values = time_limited_kde_evaluate(kde, bins_centers)*density_factor
@@ -485,7 +485,11 @@ def time_mask(df, DUT_number, bins=10000, CFD_MCP=20, p0=None, sigmas=5, plot=Tr
     Returns
     -------
     time_cut:   boolean mask of the events within the calculated time frame 
-
+    info:       dictionary containing other useful information about the time cut:
+                    'parameters':   parameters of the gaussian fit
+                    'covariance':   covariance   "   "   "   "
+                    'left_base':    value of the left edge of the cut
+                    'right_base':   value of the right edge of the cut
     """
     dut = DUT_number
     hist,my_bins,_,_,_ = plot_histogram((df[f"timeCFD50_{dut}"]-df[f"timeCFD{CFD_MCP}_0"]), bins=bins)
@@ -503,7 +507,7 @@ def time_mask(df, DUT_number, bins=10000, CFD_MCP=20, p0=None, sigmas=5, plot=Tr
     if not plot:
         logging.warning("in time_mask() plot has been closed")
         plt.close()
-    return time_cut, {'parameters':param, 'covariance':covar} #, info ###?? this could be a dictionary with the fit parameter values or similar info
+    return time_cut, {'parameters':param, 'covariance':covar, 'left_base':left_base, 'right_base':right_base} #, info ###?? this could be a dictionary with the fit parameter values or similar info
     
 
 ### I probably should pass a Batch class object for the plotting, it would contain sensor names, transimpedance, 
