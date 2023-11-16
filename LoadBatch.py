@@ -293,7 +293,7 @@ def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, pl
     if savefig: fig.savefig(f"{savefig_path}find_min_btw_peaks{savefig_details}.svg")
     if not plot:
         plt.close()
-        logging.warning('in find_min_btw_peaks(), closing plots')
+        logging.info('in find_min_btw_peaks(), closing plots')
     return  x_min 
 
 
@@ -338,12 +338,6 @@ def extend_edges(left_edge, right_edge, fraction= 0.2):
         logging.warning("in 'extend_edges()', left_edge > right_edge")
     extra_edge = (right_edge-left_edge)*fraction
     return left_edge-extra_edge, right_edge+extra_edge
-
-
-### I don't need this anymore
-# def my_and(x,y):
-#     """I need a 'and' function for combining dataframes"""  
-#     return x and y
 
 
 def efficiency(data, threshold, percentage=True):
@@ -505,7 +499,7 @@ def time_mask(df, DUT_number, bins=10000, CFD_MCP=20, p0=None, sigmas=5, plot=Tr
     plt.xlim(param[1]-100*np.abs(param[2]), param[1]+100*np.abs(param[2]))
     plt.plot(bins_centers, my_gauss(bins_centers,*param), color='k')
     if not plot:
-        logging.warning("in time_mask() plot has been closed")
+        logging.info("in time_mask() plot has been closed")
         plt.close()
     return time_cut, {'parameters':param, 'covariance':covar, 'left_base':left_base, 'right_base':right_base} #, info ###?? this could be a dictionary with the fit parameter values or similar info
     
