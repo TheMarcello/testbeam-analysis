@@ -1,6 +1,7 @@
 import numpy as np # NumPy
 import matplotlib.pylab as plt # Matplotlib plots
 import pandas as pd # Pandas
+import logging
 # import uproot
 # import pickle
 
@@ -14,13 +15,14 @@ class Sensor:
     Class to describe the DUT that is being studied in a single batch
     ------------
     name:           name of the sensor
-    board:          name of the board on which the sensor is mounted
     dut_position:   position of the sensor (1-5)
-    fluence:        radiation given to the sensor [units?]
-    transimpedance: transimpedance, depends on which board (to calculate charge) [units?]
     voltage:        voltage of the sensor [V]
+    angle:          angle of the sensor to the beam
+    board:          name of the board on which the sensor is mounted
+    fluence:        radiation given to the sensor [units?]
+    transimpedance: transimpedance, it depends on the board (used to calculate charge) [units?]
     """
-    def __init__(self, name, dut_position, transimpedance, voltage, angle=0, board='no board', fluence=-1):
+    def __init__(self, name, dut_position, voltage, angle=0, board='no board', fluence=-1, transimpedance=-1):
         self.name = name
         self.angle = angle
         self.board = board
@@ -38,6 +40,7 @@ class Oscilloscope:
     channels:       dictionary of the 4 channels: {'Ch1':sensor1, etc.}
     ------------
     add_sensor:     add a Sensor to the specified channel
+    get_sensor:     get a Sensor from the specified channel
     """
     def __init__(self, name, sensor1=None, sensor2=None, sensor3=None, sensor4=None):
         self.name = name
@@ -45,6 +48,13 @@ class Oscilloscope:
     
     def add_sensor(self, channel, sensor):
         self.channels[channel] = sensor
+    
+    def get_sensor(self, ch):
+        match ch:
+            case 'Ch1': return self.channels['Ch1']
+            case 'Ch2': return self.channels['Ch2']
+            case 'Ch3': return self.channels['Ch3']
+            case 'Ch4': return self.channels['Ch4']
 
 
 class Batch:
@@ -58,7 +68,7 @@ class Batch:
     tempB:          temperature of thermometer B [°C]
     S1, S2:         Oscilloscope objects 1 and 2
 
-    get_fluence_boards():
+    set_fluence_boards():   sets board names and fluences (only for __init__)
     """
     def __init__(self, batch_number, angle, runs, temperatureA, temperatureB, S1, S2):#):
         self.batch_number = batch_number
@@ -66,27 +76,27 @@ class Batch:
         self.runs = runs
         self.tempA = temperatureA
         self.tempB = temperatureB
-        self.S = {'S1':S1, 'S2':S2}
-        self.get_fluence_boards()
+        self.S = {'S1':S1, 'S2':S2} ### this is a bit overly nested but it's useful for a loop like: "S in ['S1','S2']:"
+        self.set_fluence_boards()
 
-    def get_fluence_boards(self):
+    def set_transimpedance(self):
         """
+        ONLY FOR INITIALIZATION
+        assigns transimpedance to each sensor depending on the board
+        """
+
+    def set_fluence_boards(self):
+        """
+        ONLY FOR INITIALIZATION
         Map of each board names for each batch
         same thing for the fluence
         """
-    #     four_ch = 10700
-    #     single_ch = 4700
-#         if S=="S1": scope.channels['Ch1'].fluence, scope.channels['Ch2'].fluence, \
-#                     scope.channels['Ch3'].fluence, scope.channels['Ch4'].fluence = (0, 0, 0, 0)
-#         elif S=="S2":   scope.channels['Ch1'].fluence, scope.channels['Ch2'].fluence, \
-#                         scope.channels['Ch3'].fluence, scope.channels['Ch4'].fluence = (0, 0, 0, 0)
         none = ' '
         batch = self.batch_number        
         for S,scope in self.S.items():
                ### default to zero because most of them are unirradiated and not angled
             fluences = (0, 0, 0, 0)     
             # angles = (0, 0, 0, 0)     ### I am not keeping this because it's inconsistent, I keep the RUNLOG angles
-            ### maybe I can avoid some repetition
             if batch>=100 and batch<200:     ### Ch2      Ch3       Ch4
                 if S=="S1":     boards = (none, 'CERN-1','CERN-1','CERN-1')
                 elif S=="S2":   boards = (none, 'JSI-B14', 'JSI-B12', 'CERN-1')
@@ -163,6 +173,7 @@ class Batch:
                     boards = (none, none, 'JSI B2', none)
                     fluences = (0, 0, '2.00E+14', 0)
             else:     ### last case, return all none
+                logging.error(f"Batch:{batch} does not have any board names assigned")
                 if S=="S1": boards = (none, none, none, none)
                 elif S=="S2":   boards =(none, none, none, none)
                 
