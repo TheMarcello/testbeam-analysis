@@ -54,6 +54,8 @@ def load_batch(batch_number, oscilloscope, branches=["eventNumber", "Xtr", "Ytr"
     return df
 
 ### pretty ugly but no alternatives right now
+### now I can just check if the board name is CERN1,2,3 or something else
+### because it's easier to separate them now that I have the board name
 def get_transimpedance(batch, oscilloscope):
     """
     Pretty ugly function that links each batch to the transimpedance value of the board \

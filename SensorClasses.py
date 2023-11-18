@@ -170,14 +170,3 @@ class Batch:
                             scope.channels['Ch3'].board, scope.channels['Ch4'].board = boards 
             scope.channels['Ch1'].fluence, scope.channels['Ch2'].fluence, \
                             scope.channels['Ch3'].fluence, scope.channels['Ch4'].fluence = fluences 
-
-
-# sensor1 = Sensor('USTC','CERN1', 0, 1, 4700, -80)
-# sensor1.name
-
-# my_scope = Oscilloscope('S1', sensor1, sensor1, sensor1, sensor1)
-# my_scope.channels['Ch1'].name
-
-# my_batch = Batch(999, 0, [9998,9999], -30, my_scope, my_scope)
-# # my_batch.angle
-# my_batch.S1.channels['Ch1'].transimpedance
