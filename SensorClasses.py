@@ -9,6 +9,7 @@ import logging
 from scipy.signal import find_peaks, gaussian
 from scipy.stats import gaussian_kde
 
+NO_BOARD = 'no_board' ### default value for when the board info is missing (might change later)
 
 class Sensor:
     """
@@ -22,7 +23,7 @@ class Sensor:
     fluence:        radiation given to the sensor [units?]
     transimpedance: transimpedance, it depends on the board (used to calculate charge) [units?]
     """
-    def __init__(self, name, dut_position, voltage, angle=0, board='no board', fluence=-1, transimpedance=-1):
+    def __init__(self, name, dut_position, voltage, angle=0, board=NO_BOARD, fluence=-1, transimpedance=-1):
         self.name = name
         self.angle = angle
         self.board = board
@@ -78,13 +79,9 @@ class Batch:
         self.tempB = temperatureB
         self.S = {'S1':S1, 'S2':S2} ### this is a bit overly nested but it's useful for a loop like: "S in ['S1','S2']:"
         self.set_fluence_boards()
+        self.set_transimpedance()
 
-    def set_transimpedance(self):
-        """
-        ONLY FOR INITIALIZATION
-        assigns transimpedance to each sensor depending on the board
-        """
-
+    
     def set_fluence_boards(self):
         """
         ONLY FOR INITIALIZATION
@@ -181,3 +178,22 @@ class Batch:
                             scope.channels['Ch3'].board, scope.channels['Ch4'].board = boards 
             scope.channels['Ch1'].fluence, scope.channels['Ch2'].fluence, \
                             scope.channels['Ch3'].fluence, scope.channels['Ch4'].fluence = fluences 
+            
+            
+    def set_transimpedance(self): ### move it after set_fluence_boards() afterwards
+        """
+        ONLY FOR INITIALIZATION
+        assigns transimpedance to each sensor depending on the board
+        """
+        single_ch_transimpedance = 4700 #mV*ps/fC (I think)
+        four_ch_transimpedance = 10700 
+        for S,scope in self.S.items():
+            for ch, sensor in scope.channels.items():
+                if 'CERN' in sensor.board and 'CERN-4' not in sensor.board: ### boards CERN-1,CERN-2,CERN-3
+                    sensor.transimpedance = four_ch_transimpedance
+                elif sensor.board == NO_BOARD:                              ### no board name
+                    logging.error("set_transimpedance(): No board name assigned")
+                elif sensor.board is not None and sensor.board != NO_BOARD: ### all the other options
+                    sensor.transimpedance = single_ch_transimpedance
+                else:                                                       ### probably board name is None
+                    logging.error("set_transimpedance(): Invalid board name")
