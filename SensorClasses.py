@@ -56,6 +56,8 @@ class Oscilloscope:
             case 'Ch2' | 'ch2': return self.channels['Ch2']
             case 'Ch3' | 'ch3': return self.channels['Ch3']
             case 'Ch4' | 'ch4': return self.channels['Ch4']
+            case other:
+                logging.error(f"Wrong argument in get_sensor(): {other}")
 
 
 class Batch:
