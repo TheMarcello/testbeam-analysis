@@ -52,10 +52,10 @@ class Oscilloscope:
     
     def get_sensor(self, ch):
         match ch:
-            case 'Ch1': return self.channels['Ch1']
-            case 'Ch2': return self.channels['Ch2']
-            case 'Ch3': return self.channels['Ch3']
-            case 'Ch4': return self.channels['Ch4']
+            case 'Ch1' | 'ch1': return self.channels['Ch1']
+            case 'Ch2' | 'ch2': return self.channels['Ch2']
+            case 'Ch3' | 'ch3': return self.channels['Ch3']
+            case 'Ch4' | 'ch4': return self.channels['Ch4']
 
 
 class Batch:

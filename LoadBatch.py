@@ -52,10 +52,9 @@ def load_batch(batch_number, oscilloscope, branches=["eventNumber", "Xtr", "Ytr"
         return
     df = df.drop(columns=columns_to_remove)
     return df
+    
 
 ### pretty ugly but no alternatives right now
-### now I can just check if the board name is CERN1,2,3 or something else
-### because it's easier to separate them now that I have the board name
 def get_transimpedance(batch, oscilloscope):
     """
     Pretty ugly function that links each batch to the transimpedance value of the board \
@@ -506,10 +505,13 @@ def time_mask(df, DUT_number, bins=10000, CFD_MCP=20, p0=None, sigmas=5, plot=Tr
     return time_cut, {'parameters':param, 'covariance':covar, 'left_base':left_base, 'right_base':right_base} #, info ###?? this could be a dictionary with the fit parameter values or similar info
     
 
-### I probably should pass a Batch class object for the plotting, it would contain sensor names, transimpedance, 
-def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice', n_DUT=None, mask=None, geometry_cut=False, only_center=False,
-         fig_ax=None, savefig=False, savefig_path='../various plots', savefig_details='', fmt='svg',
-         **kwrd_arg):
+### I want pass a Batch class object for the plotting, it would contain sensor names, transimpedance, 
+# def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice', n_DUT=None, mask=None, geometry_cut=False, only_center=False,
+#          fig_ax=None, savefig=False, savefig_path='../various plots', savefig_details='', fmt='svg',
+#          **kwrd_arg):
+def plot(df, plot_type, batch_object, this_scope, *, bins=None, bins_find_min='rice', n_DUT=None, mask=None, geometry_cut=False, only_center=False, threshold_charge=None,
+        fig_ax=None, savefig=False, savefig_path='../various plots', savefig_details='', fmt='svg',
+        **kwrd_arg):
     """
     Function to produce the plots \n
     Parameters
@@ -522,8 +524,8 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
                         '2D_Sensors':   pulseHeight cut plot + 2D plot of tracks with cut (highlighting the sensors)
                         '1D_Efficiency':
                         '2D_Efficiency':
-    batch:          batch number
-    sensors:        dictionary of the sensors in this batch
+    batch_object:   batch object (from SensorClasses)
+    this_scope:     oscilloscope name (either 'S1' or 'S2')
     bins:           binning options, (int,int) or (bin_edges_list, bin_edges_list), different default for each plot_type
     bins_find_min:  binning options for the find_min_btw_peaks function (in '2D_Sensors')  
     n_DUT:          number of devices under test (3 for each Scope for May 2023)
@@ -544,8 +546,9 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
             else:       fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(15,6), dpi=200, sharey='all')
             if bins is None: bins = (200,200)   ### default binning
             for dut in n_DUT:
-                if sensors: sensor_label=f"sensor: {sensors[f'Ch{dut+1}']}"
-                else:       sensor_label=f"Ch{dut+1}"
+                sensor_label = f"sensor: {batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
+                # if sensors: sensor_label=f"sensor: {sensors[f'Ch{dut+1}']}"
+                # else:       sensor_label=f"Ch{dut+1}"
                 plot_histogram(df[f"Xtr_{dut-1}"], label=sensor_label, bins=bins[0], fig_ax=(fig,axes[0]), **kwrd_arg)
                 plot_histogram(df[f"Ytr_{dut-1}"], label=sensor_label, bins=bins[1], fig_ax=(fig,axes[1]), **kwrd_arg)
             axes[0].set_title("X axis projection")
@@ -565,8 +568,9 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
             for i,dut in enumerate(n_DUT):
                 if mask:  hist, _, _, _, = axes[i].hist2d(df[f"Xtr_{dut-1}"].loc[mask[dut-1]], df[f"Ytr_{dut-1}"].loc[mask[dut-1]], bins=bins, **kwrd_arg)
                 else:       hist, _, _, _, = axes[i].hist2d(df[f"Xtr_{dut-1}"], df[f"Ytr_{dut-1}"], bins=bins, **kwrd_arg)
-                if sensors: plot_title = f"Ch{dut+1}\n({sensors[f'Ch{dut+1}']})"
-                else: plot_title = f"Ch{dut+1}"
+                plot_title = f"Ch{dut+1}\n{batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
+                # if sensors: plot_title = f"Ch{dut+1}\n({sensors[f'Ch{dut+1}']})"
+                # else: plot_title = f"Ch{dut+1}"
                 axes[i].grid('--')
                 axes[i].set_title(plot_title)
                 axes[i].set_aspect('equal')
@@ -577,20 +581,21 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
                 secx.set_xlabel('mm', fontsize=20)
                 secy.set_ylabel('mm', fontsize=20)
             fig.tight_layout(w_pad=6, h_pad=4)
-            title_position = 1.1
+            title_position = 1.05
 
         case "pulseHeight":       ### PulseHeight plot
             if fig_ax:  fig, axes = fig_ax
             else:       fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(15,10), dpi=200)
             if bins is None: bins = 'rice'
             for i in n_DUT.insert(0,0):
-                if sensors: sensor_label=f"sensor: {sensors[f'Ch{i+1}']}"
-                else:       sensor_label=f'Ch{i+1}'
+                sensor_label = f"sensor: {batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
+                # if sensors: sensor_label=f"sensor: {sensors[f'Ch{i+1}']}"
+                # else:       sensor_label=f'Ch{i+1}'
                 plot_histogram(df[f"pulseHeight_{i}"], poisson_err=True, error_band=True, bins=bins, fig_ax=(fig,axes), label=sensor_label, **kwrd_arg)
             axes.semilogy()
             axes.set_xlabel("PulseHeight [mV]", fontsize=20)
             axes.set_ylabel("Events (log)", fontsize=20)
-            axes.set_title(f"PulseHeight (no cut), batch {batch}, bins {bins}", fontsize=24, y=1.05)
+            axes.set_title(f"PulseHeight (no cut), batch {batch_object.batch_number}, bins {bins}", fontsize=24, y=1.05)
             axes.set_xlim(left=-10)
             axes.legend(fontsize=20)
             title_position = 1.15
@@ -610,10 +615,11 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
                 if not minimum:
                     logging.warning("in '2D_Sensors', No minimum found, no 2D plot")
                     # print("No minimum found, no 2D plot")
-                    axes[0,i].set_title(f"Ch{dut+1} \n({sensors[f'Ch{dut+1}']})")
+                    axes[0,i].set_title(f"Ch{dut+1}\n{batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}")
                     continue
-                if sensors: plot_title = f"Ch{dut+1}, "+"cut: %.1f"%minimum+f"mV \n({sensors[f'Ch{dut+1}']})"
-                else:       plot_title = f"Ch{dut+1}"
+                plot_title = f"Ch{dut+1}, "+"cut:.1f"%minimum+f"mV \n{batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
+                # if sensors: plot_title = f"Ch{dut+1}, "+"cut: %.1f"%minimum+f"mV \n({sensors[f'Ch{dut+1}']})"
+                # else:       plot_title = f"Ch{dut+1}"
                 axes[0,i].set_title(plot_title)
                 pulseHeight_filter = df[f"pulseHeight_{dut}"]>minimum
                 axes[1,i].hist2d(df[f"Xtr_{dut-1}"].loc[pulseHeight_filter], df[f"Ytr_{dut-1}"].loc[pulseHeight_filter],
@@ -629,11 +635,13 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
             title_position = 1.15
 
         case "1D_Efficiency":
-            for key, value in kwrd_arg.items():
-                match key:
-                    case 'threshold_charge': threshold_charge=value
-                    case 'transimpedance':   transimpedance=value
-                    case other: logging.warning(f"invalid argument: {other}") #print(f"W: invalid argument: {other}")
+            if threshold_charge is None:
+                logging.error(f"Provide a threshold charge for efficiency, {threshold_charge} was given")
+            # for key, value in kwrd_arg.items():
+            #     match key:
+            #         case 'threshold_charge': threshold_charge=value
+            #     #     case 'transimpedance':   transimpedance=value
+            #         case other: logging.warning(f"invalid argument: {other}") #print(f"W: invalid argument: {other}")
             if bins is None: bins = (200)       ### default binning
             coord = ['X','Y']
             if len(n_DUT)==1: axes = axes[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case
@@ -645,11 +653,12 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
             fig.tight_layout(w_pad=6, h_pad=10)
             
             for i,dut in enumerate(n_DUT):
-                if geometry_cut and mask: bool_mask = np.logical_and(mask[dut-1],geo_mask[dut-1])
-                elif geometry_cut:  bool_mask = geo_mask[dut-1]  ### this is a boolean mask of the selected positions                
+                if geometry_cut and mask: bool_mask = np.logical_and(mask[dut-1],geo_mask[i])
+                elif geometry_cut:  bool_mask = geo_mask[i]  ### this is a boolean mask of the selected positions                
                 elif mask:          bool_mask = mask[dut-1]
                 else:       bool_mask = pd.Series(True,index=df.index)
-                events_above_threshold = df[f"charge_{dut}"].loc[bool_mask]/transimpedance[dut-1] > threshold_charge
+                transimpedance = batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').transimpedance
+                events_above_threshold = df[f"charge_{dut}"].loc[bool_mask]/transimpedance > threshold_charge
                 for coord_idx, XY in enumerate(coord):
                     above_threshold = np.logical_and(bool_mask, events_above_threshold)
                     total_events_in_bin, bins_edges, _, _, _ = plot_histogram(df[f"{XY}tr_{dut-1}"].loc[bool_mask], bins=bins[coord_idx], fig_ax=(fig, axes[coord_idx,i]))
@@ -661,8 +670,9 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
                     sigma_coeff = 1
                     axes[coord_idx,i].errorbar(bins_centers, eff, yerr=sigma_coeff*err, elinewidth=1, markersize=0, linewidth=0, capsize=1.5,
                                 label=f"error: {sigma_coeff}$\sigma$")
-                    if sensors: plot_title = f"{XY} axis projection, Ch{dut+1} \n({sensors[f'Ch{dut+1}']})"
-                    else:       plot_title = f"{XY} axis projection, Ch{dut+1}"
+                    plot_title = f"{XY} axis projection, Ch{dut+1}\n{batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
+                    # if sensors: plot_title = f"{XY} axis projection, Ch{dut+1} \n({sensors[f'Ch{dut+1}']})"
+                    # else:       plot_title = f"{XY} axis projection, Ch{dut+1}"
                     efficiency_bar = 0.95 ### horizontal line at this efficiency %
                     axes[coord_idx,i].axhline(efficiency_bar, label=f"{efficiency_bar*100}% efficiency", color='r', alpha=0.4, linewidth=2)
                     axes[coord_idx,i].set_title(plot_title, fontsize=24, y=1.05)
@@ -678,17 +688,20 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
             if bins is None: bins = (200,200)       ### default binning
             fig.tight_layout(w_pad=6, h_pad=6)
             if len(n_DUT)==1: axes = np.array(axes)[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case
-            for key, value in kwrd_arg.items():
-                match key:
-                    case 'threshold_charge': threshold_charge=value
-                    case 'transimpedance':   transimpedance=value
-                    case other: logging.warning(f"invalid argument: {other}") # print(f"invalid argument: {other}")
+            if threshold_charge is None:
+                logging.error(f"Provide a threshold charge for efficiency, {threshold_charge} was given")
+            # for key, value in kwrd_arg.items():
+            #     match key:
+            #         case 'threshold_charge': threshold_charge=value
+            #         # case 'transimpedance':   transimpedance=value
+            #         case other: logging.warning(f"invalid argument: {other}") # print(f"invalid argument: {other}")
             for i,dut in enumerate(n_DUT):
                 if mask:    bool_mask = mask[dut-1]
                 elif geometry_cut: bool_mask = geometry_mask(df, bins, bins_find_min, DUT_number=dut, only_center=only_center)    ### this is a boolean mask of the selected positions                
                 else:       bool_mask = pd.Series(True,index=df.index)   # should probably be geometry_cut instead
+                transimpedance = batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').transimpedance
                 total_events_in_bin, x_edges, y_edges, _ = axes[i].hist2d(df[f"Xtr_{dut-1}"].loc[bool_mask], df[f"Ytr_{dut-1}"].loc[bool_mask], bins=bins)
-                events_above_threshold = df[f"charge_{dut}"].loc[bool_mask]/transimpedance[dut-1] > threshold_charge
+                events_above_threshold = df[f"charge_{dut}"].loc[bool_mask]/transimpedance > threshold_charge
                 above_threshold = np.logical_and(bool_mask, events_above_threshold)
                 events_above_threshold_in_bin, _, _, _ = axes[i].hist2d(df[f"Xtr_{dut-1}"].loc[above_threshold], df[f"Ytr_{dut-1}"].loc[above_threshold], bins=bins)
                 efficiency_map = np.divide(events_above_threshold_in_bin, total_events_in_bin, where=total_events_in_bin!=0,
@@ -697,8 +710,9 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
                 im = axes[i].imshow(efficiency_map.T, origin='lower', extent=[x_edges[0], x_edges[-1], y_edges[0], y_edges[-1]],
                         aspect='equal', vmin=0, vmax=100)
                 axes[i].grid('--')
-                if sensors: plot_title = f"Ch{dut+1} ({sensors[f'Ch{dut+1}']})"
-                else:       plot_title = f"Ch{dut+1}"
+                plot_title = f"Ch{dut+1}\n{batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
+                # if sensors: plot_title = f"Ch{dut+1} ({sensors[f'Ch{dut+1}']})"
+                # else:       plot_title = f"Ch{dut+1}"
                 axes[i].set_title(plot_title, fontsize=16)
                 axes[i].set_xlabel('X Position (pixels)', fontsize=20)
                 axes[i].set_ylabel('Y Position (pixels)', fontsize=20)
@@ -706,20 +720,18 @@ def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice',
                 secy = axes[i].secondary_yaxis('right', functions=(lambda x: x*PIXEL_SIZE, lambda y: y*PIXEL_SIZE))
                 secx.set_xlabel('mm', fontsize=20)
                 secy.set_ylabel('mm', fontsize=20)
-            title_position = 1.15
+            title_position = 1.2
             fig.colorbar(im, ax=axes.ravel().tolist(), label="Efficiency (%)")
 
         case other:
-            logging.error("""No plot_type found, options are:
+            logging.error(f"""{other} not a plot option. Options are:
             '1D_Tracks', '2D_Tracks', 'pulseHeight', '2D_Sensors', '1D_Efficiency', '2D_Efficiency' """)
-            # print("""No plot_type found, options are:
-            # '1D_Tracks', '2D_Tracks', 'pulseHeight', '2D_Sensors', '1D_Efficiency', '2D_Efficiency' """)
             return
     
-    fig.suptitle(f"{plot_type}, batch: {batch} {savefig_details}", fontsize=24, y=title_position)
+    fig.suptitle(f"{plot_type}, batch: {batch_object.batch_number} {savefig_details}", fontsize=24, y=title_position)
     plt.show()
     if savefig: 
-        file_name = f"{plot_type}_{batch}{savefig_details}.{fmt}"
+        file_name = f"{plot_type}_{batch_object.batch_number}{savefig_details}.{fmt}"
         fig.savefig(os.path.join(savefig_path, file_name), bbox_inches="tight")
     return fig, axes
 
