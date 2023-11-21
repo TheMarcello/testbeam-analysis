@@ -13,7 +13,7 @@ import os # read directories etc.
 from scipy.signal import find_peaks, gaussian
 from scipy.optimize import curve_fit
 from scipy.stats import gaussian_kde
-# import pylandau
+import pylandau
 # import re
 # import copy
 from wrapt_timeout_decorator import timeout
