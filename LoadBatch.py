@@ -54,57 +54,58 @@ def load_batch(batch_number, oscilloscope, branches=["eventNumber", "Xtr", "Ytr"
     return df
     
 
-### pretty ugly but no alternatives right now
-def get_transimpedance(batch, oscilloscope):
-    """
-    Pretty ugly function that links each batch to the transimpedance value of the board \
-    it mounted on.
-    """
-    four_ch = 10700
-    single_ch = 4700
-    none = -1
-    if batch>=100 and batch<200:     ### Ch2      Ch3       Ch4
-        if oscilloscope=="S1":   return (four_ch, four_ch, four_ch)
-        elif oscilloscope=="S2": return (single_ch, single_ch, four_ch)
-    elif batch>=200 and batch<300:
-        if oscilloscope=="S1":   return (four_ch, four_ch, none)
-        elif oscilloscope=="S2": return (none, none, none)
-    elif batch>=300 and batch<400:
-        if oscilloscope=="S1":   return (four_ch, four_ch, none)
-        elif oscilloscope=="S2": return (single_ch, single_ch, four_ch)
-    elif batch>=400 and batch<500:
-        if oscilloscope=="S1":   return (four_ch, four_ch, four_ch)
-        elif oscilloscope=="S2": return (single_ch, single_ch, single_ch)
-    elif batch>=500 and batch<600:
-        if oscilloscope=="S1":   return (single_ch, single_ch, single_ch)
-        elif oscilloscope=="S2": return (single_ch, single_ch, none)
-    elif batch>=600 and batch<700:
-        if oscilloscope=="S1":   return (four_ch, four_ch, four_ch)
-        elif oscilloscope=="S2": return (single_ch, single_ch, four_ch)
-    elif batch>=700 and batch<800:
-        if oscilloscope=="S1":   return (four_ch, four_ch, four_ch)
-        elif oscilloscope=="S2": return (none, none, four_ch)
-    elif batch>=800 and batch<900:
-        if oscilloscope=="S1":   return (none, none, none)
-        elif oscilloscope=="S2": return (single_ch, single_ch, none)
-    elif batch>=900 and batch<1000:
-        if oscilloscope=="S1":   return (single_ch, single_ch, none)
-        elif oscilloscope=="S2": return (none, none, none)
-    elif batch>=1000 and batch<1100:
-        if oscilloscope=="S1":   return (four_ch, four_ch, four_ch)
-        elif oscilloscope=="S2": return (single_ch, single_ch, four_ch)
-    elif batch>=1100 and batch<1200:
-        if oscilloscope=="S1":   return (single_ch, single_ch, none)
-        elif oscilloscope=="S2": return (single_ch, single_ch, none)
-    elif batch>=1200 and batch<1300:
-        if oscilloscope=="S1":   return (single_ch, single_ch, none)
-        elif oscilloscope=="S2": return (none, none, none)
-    elif batch>=1300 and batch<1400:
-        if oscilloscope=="S1":   return (none, none, none)
-        elif oscilloscope=="S2": return (none, single_ch, none)
-    else:     ### last case, return all none
-        if oscilloscope=="S1":   return (none, none, none)
-        elif oscilloscope=="S2": return (none, none, none)
+# ### pretty ugly but no alternatives right now
+### this should not be necessary anymore
+# def get_transimpedance(batch, oscilloscope):
+#     """
+#     Pretty ugly function that links each batch to the transimpedance value of the board \
+#     it mounted on.
+#     """
+#     four_ch = 10700
+#     single_ch = 4700
+#     none = -1
+#     if batch>=100 and batch<200:     ### Ch2      Ch3       Ch4
+#         if oscilloscope=="S1":   return (four_ch, four_ch, four_ch)
+#         elif oscilloscope=="S2": return (single_ch, single_ch, four_ch)
+#     elif batch>=200 and batch<300:
+#         if oscilloscope=="S1":   return (four_ch, four_ch, none)
+#         elif oscilloscope=="S2": return (none, none, none)
+#     elif batch>=300 and batch<400:
+#         if oscilloscope=="S1":   return (four_ch, four_ch, none)
+#         elif oscilloscope=="S2": return (single_ch, single_ch, four_ch)
+#     elif batch>=400 and batch<500:
+#         if oscilloscope=="S1":   return (four_ch, four_ch, four_ch)
+#         elif oscilloscope=="S2": return (single_ch, single_ch, single_ch)
+#     elif batch>=500 and batch<600:
+#         if oscilloscope=="S1":   return (single_ch, single_ch, single_ch)
+#         elif oscilloscope=="S2": return (single_ch, single_ch, none)
+#     elif batch>=600 and batch<700:
+#         if oscilloscope=="S1":   return (four_ch, four_ch, four_ch)
+#         elif oscilloscope=="S2": return (single_ch, single_ch, four_ch)
+#     elif batch>=700 and batch<800:
+#         if oscilloscope=="S1":   return (four_ch, four_ch, four_ch)
+#         elif oscilloscope=="S2": return (none, none, four_ch)
+#     elif batch>=800 and batch<900:
+#         if oscilloscope=="S1":   return (none, none, none)
+#         elif oscilloscope=="S2": return (single_ch, single_ch, none)
+#     elif batch>=900 and batch<1000:
+#         if oscilloscope=="S1":   return (single_ch, single_ch, none)
+#         elif oscilloscope=="S2": return (none, none, none)
+#     elif batch>=1000 and batch<1100:
+#         if oscilloscope=="S1":   return (four_ch, four_ch, four_ch)
+#         elif oscilloscope=="S2": return (single_ch, single_ch, four_ch)
+#     elif batch>=1100 and batch<1200:
+#         if oscilloscope=="S1":   return (single_ch, single_ch, none)
+#         elif oscilloscope=="S2": return (single_ch, single_ch, none)
+#     elif batch>=1200 and batch<1300:
+#         if oscilloscope=="S1":   return (single_ch, single_ch, none)
+#         elif oscilloscope=="S2": return (none, none, none)
+#     elif batch>=1300 and batch<1400:
+#         if oscilloscope=="S1":   return (none, none, none)
+#         elif oscilloscope=="S2": return (none, single_ch, none)
+#     else:     ### last case, return all none
+#         if oscilloscope=="S1":   return (none, none, none)
+#         elif oscilloscope=="S2": return (none, none, none)
 
 
 def root_to_df(file_path, branches):
@@ -297,6 +298,35 @@ def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, pl
         logging.info('in find_min_btw_peaks(), closing plots')
     return  x_min 
 
+def charge_fit(df, dut, mask, transimpedance, p0=None, plot=True):
+    """
+    Function to find the best fit of the charge distribution to a Landau*Gaussian convolution
+
+    Parameters
+    ----------
+    df:         (full) dataframe of the data
+    dut:        dut number to be studied (1,2,3)
+    mask:       boolean mask to apply to the data before plotting histogram and fitting (e.g. time_mask)
+    transimpedance: transimpedance value (as df['charge_i'] needs to be divided by the transimpedance to get the actual charge)
+    p0:         initial parameters of the fit
+    plot:       boolean if the plot should be shown
+
+    Returns
+    -------
+    param:      fit parameters ### I don't remember
+    covariance: covariance matrix of the fit parameters
+    """
+    hist,my_bins,_,fig,ax = plot_histogram(df[f'charge_{dut}'].loc[mask]/transimpedance, bins='auto',
+                                          label=f"CHARGE: Ch{dut+1} no cut")
+    bins_centers = (my_bins[1:]+my_bins[:-1])/2
+    bins_centers = bins_centers.astype(np.float64)
+    charge = bins_centers[np.argmax(hist)]
+    logging.info(f'First charge estimate: {charge}')
+    if p0 is None: p0 = (charge,1,1,np.max(hist))
+    param, covariance = curve_fit(pylandau.langau, bins_centers, hist, p0=p0)
+    ax.plot(bins_centers, pylandau.langau(bins_centers, *param))
+    if not plot: plt.close()
+    return param, covariance
 
 def find_edges(data, bins='rice', use_kde=True, plot=False):
     """
