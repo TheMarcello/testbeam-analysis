@@ -298,35 +298,6 @@ def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, pl
         logging.info('in find_min_btw_peaks(), closing plots')
     return  x_min 
 
-def charge_fit(df, dut, mask, transimpedance, p0=None, plot=True):
-    """
-    Function to find the best fit of the charge distribution to a Landau*Gaussian convolution
-
-    Parameters
-    ----------
-    df:         (full) dataframe of the data
-    dut:        dut number to be studied (1,2,3)
-    mask:       boolean mask to apply to the data before plotting histogram and fitting (e.g. time_mask)
-    transimpedance: transimpedance value (as df['charge_i'] needs to be divided by the transimpedance to get the actual charge)
-    p0:         initial parameters of the fit
-    plot:       boolean if the plot should be shown
-
-    Returns
-    -------
-    param:      fit parameters ### I don't remember
-    covariance: covariance matrix of the fit parameters
-    """
-    hist,my_bins,_,fig,ax = plot_histogram(df[f'charge_{dut}'].loc[mask]/transimpedance, bins='auto',
-                                          label=f"CHARGE: Ch{dut+1} no cut")
-    bins_centers = (my_bins[1:]+my_bins[:-1])/2
-    bins_centers = bins_centers.astype(np.float64)
-    charge = bins_centers[np.argmax(hist)]
-    logging.info(f'First charge estimate: {charge}')
-    if p0 is None: p0 = (charge,1,1,np.max(hist))
-    param, covariance = curve_fit(pylandau.langau, bins_centers, hist, p0=p0)
-    ax.plot(bins_centers, pylandau.langau(bins_centers, *param))
-    if not plot: plt.close()
-    return param, covariance
 
 def find_edges(data, bins='rice', use_kde=True, plot=False):
     """
@@ -360,6 +331,37 @@ def find_edges(data, bins='rice', use_kde=True, plot=False):
     right_edge = bins_centers[np.argmin(np.gradient(values))]
     if not plot: plt.close()
     return left_edge, right_edge
+
+
+def charge_fit(df, dut, mask, transimpedance, p0=None, plot=True):
+    """
+    Function to find the best fit of the charge distribution to a Landau*Gaussian convolution
+
+    Parameters
+    ----------
+    df:         (full) dataframe of the data
+    dut:        dut number to be studied (1,2,3)
+    mask:       boolean mask to apply to the data before plotting histogram and fitting (e.g. time_mask)
+    transimpedance: transimpedance value (as df['charge_i'] needs to be divided by the transimpedance to get the actual charge)
+    p0:         initial parameters of the fit
+    plot:       boolean if the plot should be shown
+
+    Returns
+    -------
+    param:      fit parameters (mpv, eta, sigma, A)
+    covariance: covariance matrix of the fit parameters
+    """
+    hist,my_bins,_,fig,ax = plot_histogram(df[f'charge_{dut}'].loc[mask]/transimpedance, bins='auto',
+                                          label=f"CHARGE: Ch{dut+1} no cut")
+    bins_centers = (my_bins[1:]+my_bins[:-1])/2
+    bins_centers = bins_centers.astype(np.float64)
+    charge = bins_centers[np.argmax(hist)]
+    logging.info(f'First charge estimate: {charge}')
+    if p0 is None: p0 = (charge,1,1,np.max(hist))
+    param, covariance = curve_fit(pylandau.langau, bins_centers, hist, p0=p0)
+    ax.plot(bins_centers, pylandau.langau(bins_centers, *param))
+    if not plot: plt.close()
+    return param, covariance
 
 
 def extend_edges(left_edge, right_edge, fraction= 0.2):
@@ -503,7 +505,7 @@ def time_mask(df, DUT_number, bins=10000, CFD_MCP=20, p0=None, sigmas=5, plot=Tr
     DUT_number: number of the selected dut for the time_mask filter
     bins:       binning options for the time difference
     CFD_MCP:    constant fraction discriminator for the MCP, possibles are: 20,50,70 (percentage)
-    p0:         initial parameters for the gaussian fit
+    p0:         initial parameters for the gaussian fit (A, mu, sigma, background)
     sigmas:     number of sigmas from the center to include in the time cut
     plot:       boolean, if False plt.close() is called so that no plot is showed
 
