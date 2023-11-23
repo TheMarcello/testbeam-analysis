@@ -24,6 +24,28 @@ from SensorClasses import *
 PIXEL_SIZE = 0.0185 #mm
 
 
+def my_gauss(x, A, mu, sigma, background):
+    """Custom normal distribution function + uniform background"""
+    return A * np.exp(-0.5*((x-mu)/sigma)**2) + background
+
+
+def read_pickle(file):
+    """
+    Read the '.pickle' file containing all the list of sensors for each batch, oscilloscope, channel
+    
+    Parameters
+    ----------
+    file:           file path to the .pickle c
+
+    Returns
+    pickle_dict:    (usually dict) contained in the pickle file
+    -------
+    """
+    with open(file, 'rb') as f:
+        pickle_dict = pickle.load(f)
+    return pickle_dict
+
+
 def load_batch(batch_number, oscilloscope, branches=["eventNumber", "Xtr", "Ytr", "pulseHeight", "charge", "timeCFD20", "timeCFD50", "timeCFD70"],
               data_path=f"../Data_TestBeam/2023_May/"):
     """"
@@ -190,6 +212,104 @@ def plot_histogram(data, bins='auto', poisson_err=False, error_band=False, fig_a
     return hist, bins_points, info, fig, ax
 
 
+def charge_fit(df, dut, mask, transimpedance, p0=None, plot=True):
+    """
+    Function to find the best fit of the charge distribution to a Landau*Gaussian convolution
+
+    Parameters
+    ----------
+    df:         (full) dataframe of the data
+    dut:        dut number to be studied (1,2,3)
+    mask:       boolean mask to apply to the data before plotting histogram and fitting (e.g. time_mask)
+    transimpedance: transimpedance value (as df['charge_i'] needs to be divided by the transimpedance to get the actual charge)
+    p0:         initial parameters of the fit
+    plot:       boolean if the plot should be shown
+
+    Returns
+    -------
+    param:      fit parameters (mpv, eta, sigma, A)
+    covariance: covariance matrix of the fit parameters
+    """
+    hist,my_bins,_,fig,ax = plot_histogram(df[f'charge_{dut}'].loc[mask]/transimpedance, bins='auto',
+                                          label=f"CHARGE: Ch{dut+1} no cut")
+    bins_centers = (my_bins[1:]+my_bins[:-1])/2
+    bins_centers = bins_centers.astype(np.float64)
+    charge = bins_centers[np.argmax(hist)]
+    logging.info(f'First charge estimate: {charge}')
+    if p0 is None: p0 = (charge,1,1,np.max(hist))
+    param, covariance = curve_fit(pylandau.langau, bins_centers, hist, p0=p0)
+    ax.plot(bins_centers, pylandau.langau(bins_centers, *param))
+    if not plot: plt.close()
+    return param, covariance
+
+
+def extend_edges(left_edge, right_edge, fraction= 0.2):
+    """Just increase the s
+    """
+    if left_edge>right_edge:
+        logging.warning("in 'extend_edges()', left_edge > right_edge")
+    extra_edge = (right_edge-left_edge)*fraction
+    return left_edge-extra_edge, right_edge+extra_edge
+
+
+def efficiency(data, threshold, percentage=True):
+    """
+    Efficiency of the data: data greater than threshold value / total data. \n
+    Parameters
+    ----------
+    data:       data to evaluate efficiency
+    threshold:  thrshold value
+    percentage: boolean, default=True, if the output should be in percentage or not
+
+    Returns
+    -------
+    efficiency: (data>threshold/total)
+    """
+    factor = 1
+    if percentage: factor = 100
+    return (sum(data>threshold) / data.size) * factor
+
+
+def efficiency_error(data, threshold):
+    """
+    Efficiency of the data, including error (adjusted as in https://arxiv.org/pdf/physics/0701199v1.pdf) \n
+    Parameters
+    ----------
+    data:       data to evaluate efficiency
+    threshold:  thrshold value
+
+    Returns:
+    --------
+    efficiency: efficiency=(k+1)/(n+2)
+    error:      error=variance**0.5; variance=(k+1)*(k+2)/((n+2)*(n+3)) - (k+1)**2/(n+2)**2
+
+    """
+    k = sum(data>threshold)+1
+    n = data.size
+    eff = (k+1)/(n+2) ### this is the mean value, most probable value is still k/n
+    var = ((k+1)*(k+2)/((n+2)*(n+3)) - (k+1)**2/(n+2)**2 )
+    return (eff, var**0.5)
+
+
+def efficiency_k_n(k,n):
+    """
+    Efficiency and its error (as in https://arxiv.org/pdf/physics/0701199v1.pdf) \n
+    Parameters
+    ----------
+    k:      (array of) int, selected elements
+    n:      (array of) int, total elements
+
+    Returns
+    -------
+    efficiency: efficiency=(k+1)/(n+2)
+    error:      error=variance**0.5; variance=(k+1)*(k+2)/((n+2)*(n+3)) - (k+1)**2/(n+2)**2
+    """
+    ### this is the mean value, most probable value is still k/n
+    eff = np.where(np.logical_and(k>0,n>0), (k+1)/(n+2), 0)  
+    var = np.where(np.logical_and(k>0,n>0), ((k+1)*(k+2)/((n+2)*(n+3)) - (k+1)**2/(n+2)**2 ), 0)
+    return (eff, var**(1/2))
+
+
 @timeout(20) ### max seconds of running
 def time_limited_kde_evaluate(kde, x_axis):
     """Evaluating a kernel density estimate on the points of x_axis, it includes a timeout error if it runs too long"""
@@ -333,121 +453,6 @@ def find_edges(data, bins='rice', use_kde=True, plot=False):
     return left_edge, right_edge
 
 
-def charge_fit(df, dut, mask, transimpedance, p0=None, plot=True):
-    """
-    Function to find the best fit of the charge distribution to a Landau*Gaussian convolution
-
-    Parameters
-    ----------
-    df:         (full) dataframe of the data
-    dut:        dut number to be studied (1,2,3)
-    mask:       boolean mask to apply to the data before plotting histogram and fitting (e.g. time_mask)
-    transimpedance: transimpedance value (as df['charge_i'] needs to be divided by the transimpedance to get the actual charge)
-    p0:         initial parameters of the fit
-    plot:       boolean if the plot should be shown
-
-    Returns
-    -------
-    param:      fit parameters (mpv, eta, sigma, A)
-    covariance: covariance matrix of the fit parameters
-    """
-    hist,my_bins,_,fig,ax = plot_histogram(df[f'charge_{dut}'].loc[mask]/transimpedance, bins='auto',
-                                          label=f"CHARGE: Ch{dut+1} no cut")
-    bins_centers = (my_bins[1:]+my_bins[:-1])/2
-    bins_centers = bins_centers.astype(np.float64)
-    charge = bins_centers[np.argmax(hist)]
-    logging.info(f'First charge estimate: {charge}')
-    if p0 is None: p0 = (charge,1,1,np.max(hist))
-    param, covariance = curve_fit(pylandau.langau, bins_centers, hist, p0=p0)
-    ax.plot(bins_centers, pylandau.langau(bins_centers, *param))
-    if not plot: plt.close()
-    return param, covariance
-
-
-def extend_edges(left_edge, right_edge, fraction= 0.2):
-    """Just increase the s
-    """
-    if left_edge>right_edge:
-        logging.warning("in 'extend_edges()', left_edge > right_edge")
-    extra_edge = (right_edge-left_edge)*fraction
-    return left_edge-extra_edge, right_edge+extra_edge
-
-
-def efficiency(data, threshold, percentage=True):
-    """
-    Efficiency of the data: data greater than threshold value / total data. \n
-    Parameters
-    ----------
-    data:       data to evaluate efficiency
-    threshold:  thrshold value
-    percentage: boolean, default=True, if the output should be in percentage or not
-
-    Returns
-    -------
-    efficiency: (data>threshold/total)
-    """
-    factor = 1
-    if percentage: factor = 100
-    return (sum(data>threshold) / data.size) * factor
-
-
-def efficiency_error(data, threshold):
-    """
-    Efficiency of the data, including error (adjusted as in https://arxiv.org/pdf/physics/0701199v1.pdf) \n
-    Parameters
-    ----------
-    data:       data to evaluate efficiency
-    threshold:  thrshold value
-
-    Returns:
-    --------
-    efficiency: efficiency=(k+1)/(n+2)
-    error:      error=variance**0.5; variance=(k+1)*(k+2)/((n+2)*(n+3)) - (k+1)**2/(n+2)**2
-
-    """
-    k = sum(data>threshold)+1
-    n = data.size
-    eff = (k+1)/(n+2) ### this is the mean value, most probable value is still k/n
-    var = ((k+1)*(k+2)/((n+2)*(n+3)) - (k+1)**2/(n+2)**2 )
-    return (eff, var**0.5)
-
-
-def efficiency_k_n(k,n):
-    """
-    Efficiency and its error (as in https://arxiv.org/pdf/physics/0701199v1.pdf) \n
-    Parameters
-    ----------
-    k:      (array of) int, selected elements
-    n:      (array of) int, total elements
-
-    Returns
-    -------
-    efficiency: efficiency=(k+1)/(n+2)
-    error:      error=variance**0.5; variance=(k+1)*(k+2)/((n+2)*(n+3)) - (k+1)**2/(n+2)**2
-    """
-    ### this is the mean value, most probable value is still k/n
-    eff = np.where(np.logical_and(k>0,n>0), (k+1)/(n+2), 0)  
-    var = np.where(np.logical_and(k>0,n>0), ((k+1)*(k+2)/((n+2)*(n+3)) - (k+1)**2/(n+2)**2 ), 0)
-    return (eff, var**(1/2))
-
-
-def read_pickle(file):
-    """
-    Read the '.pickle' file containing all the list of sensors for each batch, oscilloscope, channel
-    
-    Parameters
-    ----------
-    sensor_file:    file path to the .pickle c
-
-    Returns
-    pickle_dict:    (usually dict) contained in the pickle file
-    -------
-    """
-    with open(file, 'rb') as f:
-        pickle_dict = pickle.load(f)
-    return pickle_dict
-
-
 def geometry_mask(df, bins, bins_find_min, DUT_number, only_center=False):
     """
     Creates a boolean mask for selecting the 2D shape of the sensor.
@@ -488,9 +493,6 @@ def geometry_mask(df, bins, bins_find_min, DUT_number, only_center=False):
     ygeometry = np.logical_and(df[f"Ytr_{i}"]>bottom_edge, df[f"Ytr_{i}"]<top_edge)
     bool_geometry = np.logical_and(xgeometry, ygeometry)
     return bool_geometry
-
-
-
 
 
 def time_mask(df, DUT_number, bins=10000, CFD_MCP=20, p0=None, sigmas=5, plot=True):
