@@ -490,9 +490,7 @@ def geometry_mask(df, bins, bins_find_min, DUT_number, only_center=False):
     return bool_geometry
 
 
-def my_gauss(x, A, mu, sigma, background):
-    """Custom normal distribution function + uniform background"""
-    return A * np.exp(-0.5*((x-mu)/sigma)**2) + background
+
 
 
 def time_mask(df, DUT_number, bins=10000, CFD_MCP=20, p0=None, sigmas=5, plot=True):
@@ -583,8 +581,8 @@ def plot(df, plot_type, batch_object, this_scope, *, bins=None, bins_find_min='r
                 # else:       sensor_label=f"Ch{dut+1}"
                 plot_histogram(df[f"Xtr_{dut-1}"], label=sensor_label, bins=bins[0], fig_ax=(fig,axes[0]), **kwrd_arg)
                 plot_histogram(df[f"Ytr_{dut-1}"], label=sensor_label, bins=bins[1], fig_ax=(fig,axes[1]), **kwrd_arg)
-            axes[0].set_title("X axis projection")
-            axes[1].set_title("Y axis projection")
+            axes[0].set_title("X axis projection", fontsize=20)
+            axes[1].set_title("Y axis projection", fontsize=20)
             for ax in axes:     ### modify both axes
                 ax.legend(fontsize=16)
                 ax.semilogy()
@@ -604,7 +602,7 @@ def plot(df, plot_type, batch_object, this_scope, *, bins=None, bins_find_min='r
                 # if sensors: plot_title = f"Ch{dut+1}\n({sensors[f'Ch{dut+1}']})"
                 # else: plot_title = f"Ch{dut+1}"
                 axes[i].grid('--')
-                axes[i].set_title(plot_title)
+                axes[i].set_title(plot_title, fontsize=20)
                 axes[i].set_aspect('equal')
                 axes[i].set_xlabel('pixels', fontsize=20)
                 axes[i].set_ylabel('pixels', fontsize=20)
@@ -647,12 +645,12 @@ def plot(df, plot_type, batch_object, this_scope, *, bins=None, bins_find_min='r
                 if not minimum:
                     logging.warning("in '2D_Sensors', No minimum found, no 2D plot")
                     # print("No minimum found, no 2D plot")
-                    axes[0,i].set_title(f"Ch{dut+1}\n{batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}")
+                    axes[0,i].set_title(f"Ch{dut+1}\n{batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}", fontsize=24)
                     continue
                 plot_title = f"Ch{dut+1}, "+"cut:.1f"%minimum+f"mV \n{batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
                 # if sensors: plot_title = f"Ch{dut+1}, "+"cut: %.1f"%minimum+f"mV \n({sensors[f'Ch{dut+1}']})"
                 # else:       plot_title = f"Ch{dut+1}"
-                axes[0,i].set_title(plot_title)
+                axes[0,i].set_title(plot_title, fontsize=20)
                 pulseHeight_filter = df[f"pulseHeight_{dut}"]>minimum
                 axes[1,i].hist2d(df[f"Xtr_{dut-1}"].loc[pulseHeight_filter], df[f"Ytr_{dut-1}"].loc[pulseHeight_filter],
                                                 bins=bins, **kwrd_arg)
@@ -707,7 +705,7 @@ def plot(df, plot_type, batch_object, this_scope, *, bins=None, bins_find_min='r
                     # else:       plot_title = f"{XY} axis projection, Ch{dut+1}"
                     efficiency_bar = 0.95 ### horizontal line at this efficiency %
                     axes[coord_idx,i].axhline(efficiency_bar, label=f"{efficiency_bar*100}% efficiency", color='r', alpha=0.4, linewidth=2)
-                    axes[coord_idx,i].set_title(plot_title, fontsize=24, y=1.05)
+                    axes[coord_idx,i].set_title(plot_title, fontsize=20, y=1.05)
                     axes[coord_idx,i].set_xlabel(f"{XY} position (pixels)", fontsize=20)
                     axes[coord_idx,i].set_ylabel("Efficiency", fontsize=20)
                     axes[coord_idx,i].set_ylim(0,1)
@@ -745,7 +743,7 @@ def plot(df, plot_type, batch_object, this_scope, *, bins=None, bins_find_min='r
                 plot_title = f"Ch{dut+1}\n{batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
                 # if sensors: plot_title = f"Ch{dut+1} ({sensors[f'Ch{dut+1}']})"
                 # else:       plot_title = f"Ch{dut+1}"
-                axes[i].set_title(plot_title, fontsize=16)
+                axes[i].set_title(plot_title, fontsize=20)
                 axes[i].set_xlabel('X Position (pixels)', fontsize=20)
                 axes[i].set_ylabel('Y Position (pixels)', fontsize=20)
                 secx = axes[i].secondary_xaxis('top', functions=(lambda x: x*PIXEL_SIZE, lambda y: y*PIXEL_SIZE))
