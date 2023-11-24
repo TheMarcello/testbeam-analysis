@@ -523,7 +523,10 @@ def time_mask(df, DUT_number, bins=10000, CFD_MCP=20, p0=None, sigmas=5, plot=Tr
     if p0 is None: p0 = (np.max(hist), -5e3, 100, np.average(hist))
     bins_centers = (my_bins[:-1]+my_bins[1:])/2
     ### maybe I should add a try except
-    param, covar = curve_fit(my_gauss, bins_centers, hist, p0=p0)
+    try:
+        param, covar = curve_fit(my_gauss, bins_centers, hist, p0=p0)
+    except:
+        logging.error("in 'time_mask(): Some error occurred while fitting")
     logging.info(f"in 'time_mask()': Fit parameters {param}")
     left_base, right_base = param[1]-sigmas*np.abs(param[2]), param[1]+sigmas*np.abs(param[2])
     left_cut = (df[f"timeCFD50_{dut}"]-df[f"timeCFD{CFD_MCP}_0"])>left_base
