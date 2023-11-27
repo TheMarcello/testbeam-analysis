@@ -453,7 +453,7 @@ def find_edges(data, bins='rice', use_kde=True, plot=False):
     return left_edge, right_edge
 
 
-def geometry_mask(df, bins, bins_find_min, DUT_number, only_center=False):
+def geometry_mask(df, bins, bins_find_min, DUT_number, only_select="normal"):
     """
     Creates a boolean mask for selecting the 2D shape of the sensor.
     If the minimum of the pulseHeight could not be found it returns all True
@@ -482,16 +482,28 @@ def geometry_mask(df, bins, bins_find_min, DUT_number, only_center=False):
         # print("W: in 'geometry_mask()', something wrong, no boolean mask")
         logging.warning("in 'geometry_mask()', something wrong, no boolean mask")
         return pd.Series(True, index=df.index)  ### return all True array if there is no minimum
-    if only_center:
-        central_edge = 0.5 / 2 # 0.5mm / 2
-        center = ((left_edge+right_edge)/2, (bottom_edge+top_edge)/2)  ### center of the pixel
-        left_edge =     np.floor(center[0] - central_edge/PIXEL_SIZE)  ### new edges, rounded to the pixel
-        right_edge =    np.ceil(center[0] + central_edge/PIXEL_SIZE)
-        bottom_edge =   np.floor(center[1] - central_edge/PIXEL_SIZE)
-        top_edge =      np.ceil(center[1] + central_edge/PIXEL_SIZE)
-    xgeometry = np.logical_and(df[f"Xtr_{i}"]>left_edge, df[f"Xtr_{i}"]<right_edge)
-    ygeometry = np.logical_and(df[f"Ytr_{i}"]>bottom_edge, df[f"Ytr_{i}"]<top_edge)
-    bool_geometry = np.logical_and(xgeometry, ygeometry)
+    match only_select:
+        case "center":
+            central_edge = 0.5 / 2 # 0.5mm / 2
+            center = ((left_edge+right_edge)/2, (bottom_edge+top_edge)/2)  ### center of the pixel
+            left_edge =     np.floor(center[0] - central_edge/PIXEL_SIZE)  ### new edges, rounded to the pixel
+            right_edge =    np.ceil(center[0] + central_edge/PIXEL_SIZE)
+            bottom_edge =   np.floor(center[1] - central_edge/PIXEL_SIZE)
+            top_edge =      np.ceil(center[1] + central_edge/PIXEL_SIZE)
+            xgeometry = np.logical_and(df[f"Xtr_{i}"]>left_edge, df[f"Xtr_{i}"]<right_edge)
+            ygeometry = np.logical_and(df[f"Ytr_{i}"]>bottom_edge, df[f"Ytr_{i}"]<top_edge)
+            bool_geometry = np.logical_and(xgeometry, ygeometry)
+        case "X":
+            bool_geometry = np.logical_and(df[f"Ytr_{i}"]>bottom_edge, df[f"Ytr_{i}"]<top_edge)
+        case "Y":
+            bool_geometry = np.logical_and(df[f"Xtr_{i}"]>left_edge, df[f"Xtr_{i}"]<right_edge)
+        case "normal":
+            xgeometry = np.logical_and(df[f"Xtr_{i}"]>left_edge, df[f"Xtr_{i}"]<right_edge)
+            ygeometry = np.logical_and(df[f"Ytr_{i}"]>bottom_edge, df[f"Ytr_{i}"]<top_edge)
+            bool_geometry = np.logical_and(xgeometry, ygeometry)
+        case other:
+            logging.warning(f"{other} is not an option, options are 'center', 'X', 'Y', 'normal'")
+            return
     return bool_geometry
 
 
@@ -544,7 +556,7 @@ def time_mask(df, DUT_number, bins=10000, CFD_MCP=20, p0=None, sigmas=5, plot=Tr
 # def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice', n_DUT=None, mask=None, geometry_cut=False, only_center=False,
 #          fig_ax=None, savefig=False, savefig_path='../various plots', savefig_details='', fmt='svg',
 #          **kwrd_arg):
-def plot(df, plot_type, batch_object, this_scope, *, bins=None, bins_find_min='rice', n_DUT=None, mask=None, geometry_cut=False, only_center=False, threshold_charge=None,
+def plot(df, plot_type, batch_object, this_scope, *, bins=None, bins_find_min='rice', n_DUT=None, mask=None, geometry_cut=False, only_select="normal", threshold_charge=None,
         fig_ax=None, savefig=False, savefig_path='../various plots', savefig_details='', fmt='svg',
         **kwrd_arg):
     """
@@ -557,7 +569,7 @@ def plot(df, plot_type, batch_object, this_scope, *, bins=None, bins_find_min='r
                         '2D_Tracks':    2D plot of the reconstructed tracks
                         'pulseHeight':  histogram of the pulseHeight of all channels (log scale)
                         '2D_Sensors':   pulseHeight cut plot + 2D plot of tracks with cut (highlighting the sensors)
-                        '1D_Efficiency':
+                        '1D_Efficiency': 
                         '2D_Efficiency':
     batch_object:   batch object (from SensorClasses)
     this_scope:     oscilloscope name (either 'S1' or 'S2')
@@ -582,8 +594,6 @@ def plot(df, plot_type, batch_object, this_scope, *, bins=None, bins_find_min='r
             if bins is None: bins = (200,200)   ### default binning
             for dut in n_DUT:
                 sensor_label = f"sensor: {batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
-                # if sensors: sensor_label=f"sensor: {sensors[f'Ch{dut+1}']}"
-                # else:       sensor_label=f"Ch{dut+1}"
                 plot_histogram(df[f"Xtr_{dut-1}"], label=sensor_label, bins=bins[0], fig_ax=(fig,axes[0]), **kwrd_arg)
                 plot_histogram(df[f"Ytr_{dut-1}"], label=sensor_label, bins=bins[1], fig_ax=(fig,axes[1]), **kwrd_arg)
             axes[0].set_title("X axis projection", fontsize=20)
@@ -604,8 +614,6 @@ def plot(df, plot_type, batch_object, this_scope, *, bins=None, bins_find_min='r
                 if mask:  hist, _, _, _, = axes[i].hist2d(df[f"Xtr_{dut-1}"].loc[mask[dut-1]], df[f"Ytr_{dut-1}"].loc[mask[dut-1]], bins=bins, **kwrd_arg)
                 else:       hist, _, _, _, = axes[i].hist2d(df[f"Xtr_{dut-1}"], df[f"Ytr_{dut-1}"], bins=bins, **kwrd_arg)
                 plot_title = f"Ch{dut+1}\n{batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
-                # if sensors: plot_title = f"Ch{dut+1}\n({sensors[f'Ch{dut+1}']})"
-                # else: plot_title = f"Ch{dut+1}"
                 axes[i].grid('--')
                 axes[i].set_title(plot_title, fontsize=20)
                 axes[i].set_aspect('equal')
@@ -624,8 +632,6 @@ def plot(df, plot_type, batch_object, this_scope, *, bins=None, bins_find_min='r
             if bins is None: bins = 'rice'
             for i in n_DUT.insert(0,0):
                 sensor_label = f"sensor: {batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
-                # if sensors: sensor_label=f"sensor: {sensors[f'Ch{i+1}']}"
-                # else:       sensor_label=f'Ch{i+1}'
                 plot_histogram(df[f"pulseHeight_{i}"], poisson_err=True, error_band=True, bins=bins, fig_ax=(fig,axes), label=sensor_label, **kwrd_arg)
             axes.semilogy()
             axes.set_xlabel("PulseHeight [mV]", fontsize=20)
@@ -649,12 +655,9 @@ def plot(df, plot_type, batch_object, this_scope, *, bins=None, bins_find_min='r
                 axes[0,i].set_ylabel('Events')
                 if not minimum:
                     logging.warning("in '2D_Sensors', No minimum found, no 2D plot")
-                    # print("No minimum found, no 2D plot")
                     axes[0,i].set_title(f"Ch{dut+1}\n{batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}", fontsize=24)
                     continue
                 plot_title = f"Ch{dut+1}, "+"cut:.1f"%minimum+f"mV \n{batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
-                # if sensors: plot_title = f"Ch{dut+1}, "+"cut: %.1f"%minimum+f"mV \n({sensors[f'Ch{dut+1}']})"
-                # else:       plot_title = f"Ch{dut+1}"
                 axes[0,i].set_title(plot_title, fontsize=20)
                 pulseHeight_filter = df[f"pulseHeight_{dut}"]>minimum
                 axes[1,i].hist2d(df[f"Xtr_{dut-1}"].loc[pulseHeight_filter], df[f"Ytr_{dut-1}"].loc[pulseHeight_filter],
@@ -672,11 +675,6 @@ def plot(df, plot_type, batch_object, this_scope, *, bins=None, bins_find_min='r
         case "1D_Efficiency":
             if threshold_charge is None:
                 logging.error(f"Provide a threshold charge for efficiency, {threshold_charge} was given")
-            # for key, value in kwrd_arg.items():
-            #     match key:
-            #         case 'threshold_charge': threshold_charge=value
-            #     #     case 'transimpedance':   transimpedance=value
-            #         case other: logging.warning(f"invalid argument: {other}") #print(f"W: invalid argument: {other}")
             if bins is None: bins = (200)       ### default binning
             coord = ['X','Y']
             if len(n_DUT)==1: axes = axes[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case
@@ -706,8 +704,6 @@ def plot(df, plot_type, batch_object, this_scope, *, bins=None, bins_find_min='r
                     axes[coord_idx,i].errorbar(bins_centers, eff, yerr=sigma_coeff*err, elinewidth=1, markersize=0, linewidth=0, capsize=1.5,
                                 label=f"error: {sigma_coeff}$\sigma$")
                     plot_title = f"{XY} axis projection, Ch{dut+1}\n{batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
-                    # if sensors: plot_title = f"{XY} axis projection, Ch{dut+1} \n({sensors[f'Ch{dut+1}']})"
-                    # else:       plot_title = f"{XY} axis projection, Ch{dut+1}"
                     efficiency_bar = 0.95 ### horizontal line at this efficiency %
                     axes[coord_idx,i].axhline(efficiency_bar, label=f"{efficiency_bar*100}% efficiency", color='r', alpha=0.4, linewidth=2)
                     axes[coord_idx,i].set_title(plot_title, fontsize=20, y=1.05)
@@ -725,12 +721,7 @@ def plot(df, plot_type, batch_object, this_scope, *, bins=None, bins_find_min='r
             if len(n_DUT)==1: axes = np.array(axes)[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case
             if threshold_charge is None:
                 logging.error(f"Provide a threshold charge for efficiency, {threshold_charge} was given")
-            # for key, value in kwrd_arg.items():
-            #     match key:
-            #         case 'threshold_charge': threshold_charge=value
-            #         # case 'transimpedance':   transimpedance=value
-            #         case other: logging.warning(f"invalid argument: {other}") # print(f"invalid argument: {other}")
-            for i,dut in enumerate(n_DUT):
+             for i,dut in enumerate(n_DUT):
                 if mask:    bool_mask = mask[dut-1]
                 elif geometry_cut: bool_mask = geometry_mask(df, bins, bins_find_min, DUT_number=dut, only_center=only_center)    ### this is a boolean mask of the selected positions                
                 else:       bool_mask = pd.Series(True,index=df.index)   # should probably be geometry_cut instead
@@ -746,8 +737,6 @@ def plot(df, plot_type, batch_object, this_scope, *, bins=None, bins_find_min='r
                         aspect='equal', vmin=0, vmax=100)
                 axes[i].grid('--')
                 plot_title = f"Ch{dut+1}\n{batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
-                # if sensors: plot_title = f"Ch{dut+1} ({sensors[f'Ch{dut+1}']})"
-                # else:       plot_title = f"Ch{dut+1}"
                 axes[i].set_title(plot_title, fontsize=20)
                 axes[i].set_xlabel('X Position (pixels)', fontsize=20)
                 axes[i].set_ylabel('Y Position (pixels)', fontsize=20)
