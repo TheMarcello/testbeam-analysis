@@ -63,14 +63,12 @@ def load_batch(batch_number, oscilloscope, branches=["eventNumber", "Xtr", "Ytr"
     """
     columns_to_remove = ["Xtr_4","Xtr_5","Xtr_6","Xtr_7","Ytr_4","Ytr_5","Ytr_6","Ytr_7"]
     logging.info(f"Loading batch {batch_number} \t Oscilloscope {oscilloscope}")    
-    # print("Loading batch:", batch_number, "\t Oscilloscope", oscilloscope)
     dir_path = os.path.join(data_path,oscilloscope)
     file_path = f"tree_May2023_{oscilloscope}_{batch_number}.root"
     try:
         df = root_to_df(os.path.join(dir_path, file_path), branches)
     except FileNotFoundError:
         logging.error("Batch file not found")
-        # print(f"File not found (or other error)")
         return
     df = df.drop(columns=columns_to_remove)
     return df
@@ -182,10 +180,8 @@ def plot_histogram(data, bins='auto', poisson_err=False, error_band=False, fig_a
     fig:        matplotlib  figure object
     ax:         and axis object, so that more plots can be added on top
     """
-    if fig_ax:
-        fig, ax = fig_ax
-    else:
-        fig, ax = plt.subplots(figsize=(10,6), dpi=300)
+    if fig_ax:  fig, ax = fig_ax
+    else:       fig, ax = plt.subplots(figsize=(10,6), dpi=300)
     ax.grid('--')
     hist_parameters = {'histtype':'step'}
     hist_parameters.update(kwrd_arg)
@@ -230,21 +226,24 @@ def charge_fit(df, dut, mask, transimpedance, p0=None, plot=True):
     param:      fit parameters (mpv, eta, sigma, A)
     covariance: covariance matrix of the fit parameters
     """
-    hist,my_bins,_,fig,ax = plot_histogram(df[f'charge_{dut}'].loc[mask]/transimpedance, bins='auto',
+    if plot:    hist,my_bins,_,fig,ax = plot_histogram(df[f'charge_{dut}'].loc[mask]/transimpedance, bins='auto',
                                           label=f"CHARGE: Ch{dut+1} no cut")
+    else:       hist,my_bins = np.histogram(df[f'charge_{dut}'].loc[mask]/transimpedance, bins='auto')
     bins_centers = (my_bins[1:]+my_bins[:-1])/2
     bins_centers = bins_centers.astype(np.float64)
     charge = bins_centers[np.argmax(hist)]
     logging.info(f'First charge estimate: {charge}')
     if p0 is None: p0 = (charge,1,1,np.max(hist))
     param, covariance = curve_fit(pylandau.langau, bins_centers, hist, p0=p0)
-    ax.plot(bins_centers, pylandau.langau(bins_centers, *param))
-    if not plot: plt.close()
+    if plot:    ax.plot(bins_centers, pylandau.langau(bins_centers, *param))
+    # if not plot: plt.close()
     return param, covariance
 
 
-def extend_edges(left_edge, right_edge, fraction= 0.2):
-    """Just increase the s
+def extend_edges(left_edge, right_edge, fraction=0.2):
+    """
+    Just increase the size of the edges by a 'fraction' amount,
+    maybe overkill but easy to understand function
     """
     if left_edge>right_edge:
         logging.warning("in 'extend_edges()', left_edge > right_edge")
@@ -317,7 +316,7 @@ def time_limited_kde_evaluate(kde, x_axis):
 
 
 def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, plot=True,
-                       savefig=False, savefig_path='../various plots/', savefig_details='', fig_ax=None):#, recursion_depth=0):
+                       savefig=False, savefig_path='../various plots/', savefig_details='', fig_ax=None):
     """
     Finds the minimun between two peaks, using 'find_peaks()' function. \n
     Parameters
@@ -337,51 +336,49 @@ def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, pl
     -------
     x_min:          x position of the minimum
     """
-    if fig_ax:
-        fig, ax = fig_ax
-    else:
-        fig, ax = plt.subplots(figsize=(15,10), dpi=200)
-    # hist, bins_hist, _, fig, ax = plot_histogram(data, bins=bins, fig_ax=(fig,ax))
-    hist, bins_hist, _, fig, ax = plot_histogram(data, bins=bins, poisson_err=True, error_band=True,
-                                                 fig_ax=(fig,ax))
-    ax.semilogy()
-    ax.set_ylim(10**(-2), 1.5*np.max(hist))
+    if plot:
+        if fig_ax:  fig, ax = fig_ax
+        else:       fig, ax = plt.subplots(figsize=(15,10), dpi=200)
+        hist, bins_hist, _, fig, ax = plot_histogram(data, bins=bins, poisson_err=True, error_band=True,
+                                                    fig_ax=(fig,ax))
+        ax.semilogy()
+        ax.set_ylim(10**(-2), 1.5*np.max(hist))
+    ### use np.histogram if I don't want the plot
+    else: hist, bins_hist = np.histogram(data, bins=bins)
+
     bins_centers = (bins_hist[1:]+bins_hist[:-1])/2
-        ### Find the normalization factor so I can 'denormalize' the kde
+    ### Find the normalization factor so I can 'denormalize' the kde
     density_factor = sum(hist)*np.diff(bins_hist)
-    ### Use KERNEL DENSITY ESTIMATE
-    kde = gaussian_kde(data)
+    kde = gaussian_kde(data)    ### KERNEL DENSITY ESTIMATE
     number_of_tries = 5
     for i in range(number_of_tries):
         try:
             smoothed_hist = time_limited_kde_evaluate(kde, bins_centers) * density_factor 
         except:          ### now take only half of the points to be evaluated
             logging.info(f"Evaluating kde timeout n°: {i+1}. Trying with 1/2 number of points")
-            # print(f"Evaluating kde timeout n°: {i+1}. Trying with 1/2 number of points")
             bins_centers = bins_centers[::2] 
             density_factor = density_factor[::2]
             if i==(number_of_tries-1):
                 logging.warning("Giving up evaluating kde")
-                # print("Giving up evaluating kde")
                 return None
         else:
             break
-    ### it plots even if it cannot find the peaks and/or min
-    ax.plot(bins_centers, smoothed_hist, linewidth=1, label='Smoothed hist')
+    ### it plots before it tries to find peaks and/or min
+    if plot:    ax.plot(bins_centers, smoothed_hist, linewidth=1, label='Smoothed hist')
     if not peak_prominence: peak_prominence = np.max(hist)/100
-    if not min_prominence: min_prominence = np.max(hist)/100
+    if not min_prominence:  min_prominence = np.max(hist)/100
     recursion_depth = 0  # 0 or 1, not sure which one gives 'max_recursion' tries
-    max_recursion = 20
-    ### 
+    max_recursion = 10 # or 20
+
     while(recursion_depth<max_recursion):
             ### find (hopefully two) peaks and plot them
         peaks_idx, info_peaks = find_peaks(smoothed_hist, prominence=peak_prominence)
         global_max_idx = np.argmax(smoothed_hist)
         if (len(peaks_idx)==1) and (global_max_idx!=peaks_idx[0]):  ### find_peaks() does not find max values at edges,
             peaks_idx = np.append(global_max_idx, peaks_idx)        ### so I the global max (if not identical to the peak found)
-            
+
         if len(peaks_idx)>=2:       ### find the minimum
-            local_min, info_min = find_peaks(-smoothed_hist[peaks_idx[0]:peaks_idx[1]], prominence=min_prominence)
+            local_min, _ = find_peaks(-smoothed_hist[peaks_idx[0]:peaks_idx[1]], prominence=min_prominence)
             
         else:    ### if it doesn't work it's because only one peak was found
             logging.info("Two peaks not found, retrying")
@@ -389,7 +386,6 @@ def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, pl
             if recursion_depth==max_recursion:
                 logging.warning(f"Two PEAKS not found after {recursion_depth} iterations")
                 logging.info(": {info_peaks}")
-                # print(f"Two PEAKS not found after {recursion_depth} iterations \n info :{info_peaks}")
                 return None
             peak_prominence *= 0.5    ### reduce prominence if the peaks are not found
             continue
@@ -397,25 +393,24 @@ def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, pl
             break
         elif len(local_min)>1:
             logging.warning(f"More than one minimum found at: {[bins_centers[min_idx+peaks_idx[0]] for min_idx in local_min]}")
-            # print(f"More than one minimum found at: {[bins_centers[min_idx+peaks_idx[0]] for min_idx in local_min]}")
             break
         elif len(local_min)==0:
             recursion_depth += 1
             if recursion_depth==max_recursion:
                 logging.warning(f"No MIN found after {recursion_depth} iterations")
-                # print(f"No MIN found after {recursion_depth} iterations")# \n info :{info_min}")
                 return None
             min_prominence *= 0.5       ### reduce prominence if the min is not found
 
     x_min = bins_centers[local_min[0]+peaks_idx[0]]
-    ax.plot(bins_centers[peaks_idx], smoothed_hist[peaks_idx], 'x', markersize=10, color='k', label='Peaks')
-    ax.plot(x_min, smoothed_hist[local_min[0]+peaks_idx[0]], 'o', markersize=10, color='r',
-            label='Mimimum: %.1f'%x_min, alpha=.7)
-    ax.legend(fontsize=16)
+    if plot:
+        ax.plot(bins_centers[peaks_idx], smoothed_hist[peaks_idx], 'x', markersize=10, color='k', label='Peaks')
+        ax.plot(x_min, smoothed_hist[local_min[0]+peaks_idx[0]], 'o', markersize=10, color='r',
+                label='Mimimum: %.1f'%x_min, alpha=.7)
+        ax.legend(fontsize=16)
     if savefig: fig.savefig(f"{savefig_path}find_min_btw_peaks{savefig_details}.svg")
-    if not plot:
-        plt.close()
-        logging.info('in find_min_btw_peaks(), closing plots')
+    # if not plot:
+    #     plt.close()
+    #     logging.info('in find_min_btw_peaks(), closing plots')
     return  x_min 
 
 
@@ -434,7 +429,8 @@ def find_edges(data, bins='rice', use_kde=True, plot=False):
     left_edge:  left edge 
     right_edge: right edge
     """
-    hist, bins_points, _ = plt.hist(data, bins=bins, histtype='step')
+    if plot:    hist, bins_points, _ = plt.hist(data, bins=bins, histtype='step')
+    else:       hist, bins_points = np.histogram(data, bins=bins)  ### use np.histogram if I don't want the plot
     bins_centers = (bins_points[1:]+bins_points[:-1])/2
     if use_kde:
         kde = gaussian_kde(data)
@@ -443,13 +439,12 @@ def find_edges(data, bins='rice', use_kde=True, plot=False):
             values = time_limited_kde_evaluate(kde, bins_centers)*density_factor
         except:
             logging.warning("in 'find_edges()': KDE timed out, using normal hist")
-            # print("W: in 'find_edges()': KDE timed out, using normal hist")
             values = hist
     else:
         values = hist
     left_edge = bins_centers[np.argmax(np.gradient(values))]
     right_edge = bins_centers[np.argmin(np.gradient(values))]
-    if not plot: plt.close()
+    # if not plot: plt.close()
     return left_edge, right_edge
 
 
@@ -472,14 +467,13 @@ def geometry_mask(df, bins, bins_find_min, DUT_number, only_select="normal"):
     """
     i = DUT_number-1 ### index of the DUT
     try:    
-        min_value = find_min_btw_peaks(df[f"pulseHeight_{i+1}"], bins=bins_find_min, plot=False)
+        min_value = find_min_btw_peaks(df[f"pulseHeight_{i+1}"], bins=bins_find_min, plot=False)#True
         pulseHeight_filter = df[f"pulseHeight_{i+1}"]>min_value
         Xtr_cut = df[f"Xtr_{i}"].loc[pulseHeight_filter]       ### X tracks with applied pulseHeight
         Ytr_cut = df[f"Ytr_{i}"].loc[pulseHeight_filter]
-        left_edge, right_edge = find_edges(Xtr_cut, bins=bins[0], use_kde=False, plot=False)
-        bottom_edge, top_edge = find_edges(Ytr_cut, bins=bins[1], use_kde=False, plot=False)
+        left_edge, right_edge = find_edges(Xtr_cut, bins=bins[0], use_kde=False, plot=False)#True
+        bottom_edge, top_edge = find_edges(Ytr_cut, bins=bins[1], use_kde=False, plot=False)#True
     except:
-        # print("W: in 'geometry_mask()', something wrong, no boolean mask")
         logging.warning("in 'geometry_mask()', something wrong, no boolean mask")
         return pd.Series(True, index=df.index)  ### return all True array if there is no minimum
     match only_select:
@@ -531,24 +525,26 @@ def time_mask(df, DUT_number, bins=10000, CFD_MCP=20, p0=None, sigmas=5, plot=Tr
                     'right_base':   value of the right edge of the cut
     """
     dut = DUT_number
-    hist,my_bins,_,_,_ = plot_histogram((df[f"timeCFD50_{dut}"]-df[f"timeCFD{CFD_MCP}_0"]), bins=bins)
+    if plot:    hist,my_bins,_,_,_ = plot_histogram((df[f"timeCFD50_{dut}"]-df[f"timeCFD{CFD_MCP}_0"]), bins=bins)
+    else:       hist,my_bins = np.histogram((df[f"timeCFD50_{dut}"]-df[f"timeCFD{CFD_MCP}_0"]), bins=bins)
     if p0 is None: p0 = (np.max(hist), -5e3, 100, np.average(hist))
     bins_centers = (my_bins[:-1]+my_bins[1:])/2
-    ### maybe I should add a try except
     try:
         param, covar = curve_fit(my_gauss, bins_centers, hist, p0=p0)
     except:
-        logging.error("in 'time_mask(): Some error occurred while fitting")
+        logging.error("in 'time_mask(): some error occurred while fitting, no time mask")
+        return pd.Series(True, index=df.index), None
     logging.info(f"in 'time_mask()': Fit parameters {param}")
     left_base, right_base = param[1]-sigmas*np.abs(param[2]), param[1]+sigmas*np.abs(param[2])
     left_cut = (df[f"timeCFD50_{dut}"]-df[f"timeCFD{CFD_MCP}_0"])>left_base
     right_cut = (df[f"timeCFD50_{dut}"]-df[f"timeCFD{CFD_MCP}_0"])<right_base
     time_cut = np.logical_and(left_cut, right_cut)
-    plt.xlim(param[1]-100*np.abs(param[2]), param[1]+100*np.abs(param[2]))
-    plt.plot(bins_centers, my_gauss(bins_centers,*param), color='k')
-    if not plot:
-        logging.info("in time_mask() plot has been closed")
-        plt.close()
+    if plot:
+        plt.xlim(param[1]-100*np.abs(param[2]), param[1]+100*np.abs(param[2]))
+        plt.plot(bins_centers, my_gauss(bins_centers,*param), color='k')
+    # if not plot:
+    #     logging.info("in time_mask() plot has been closed")
+    #     plt.close()
     return time_cut, {'parameters':param, 'covariance':covar, 'left_base':left_base, 'right_base':right_base} #, info ###?? this could be a dictionary with the fit parameter values or similar info
     
 
@@ -677,23 +673,35 @@ def plot(df, plot_type, batch_object, this_scope, *, bins=None, bins_find_min='r
                 logging.error(f"Provide a threshold charge for efficiency, {threshold_charge} was given")
             if bins is None: bins = (200)       ### default binning
             coord = ['X','Y']
-            if len(n_DUT)==1: axes = axes[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case
-            if geometry_cut:   ### I have to add an extra loop outside because geometry_mask calls plt.close()
-                geo_mask = [geometry_mask(df, bins, bins_find_min, DUT_number=dut) for dut in n_DUT]      
-
+            if len(n_DUT)==1: axes = axes[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case            ### no doesn't work, I need more than 1 bool_mask valueù
+            ### USE NP.HISTOGRAM SO I DON'T GET THE PLOT?? AND USE PLT.HIST IF I WANT TO PLOT
+            
+            # for coord_idx, XY in enumerate(coord):
+            #     geo_mask[XY] = geometry_mask(df, bins, bins_find_min, DUT_number=dut, only_select=XY)
+            #     geo_mask[XY] = geometry_mask(df, bins, bins_find_min, DUT_number=dut, only_select=XY)
+            #     if geometry_cut and mask: bool_mask = np.logical_and(mask[dut-1],geo_mask[XY])
+            #     elif geometry_cut:  bool_mask = geo_mask[XY]  ### this is a boolean mask of the selected positions                
+            #     elif mask:          bool_mask = mask[dut-1]
+            #     else:       bool_mask = pd.Series(True,index=df.index)
+            #     geo_mask = [geometry_mask(df, bins, bins_find_min, DUT_number=dut) for dut in n_DUT]      
             if fig_ax:  fig, axes = fig_ax
             else:       fig, axes = plt.subplots(nrows=2, ncols=len(n_DUT), figsize=(6*len(n_DUT),10), sharex=False, sharey=False, dpi=200)
             fig.tight_layout(w_pad=6, h_pad=10)
             
             for i,dut in enumerate(n_DUT):
-                if geometry_cut and mask: bool_mask = np.logical_and(mask[dut-1],geo_mask[i])
-                elif geometry_cut:  bool_mask = geo_mask[i]  ### this is a boolean mask of the selected positions                
-                elif mask:          bool_mask = mask[dut-1]
-                else:       bool_mask = pd.Series(True,index=df.index)
-                transimpedance = batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').transimpedance
-                events_above_threshold = df[f"charge_{dut}"].loc[bool_mask]/transimpedance > threshold_charge
+                # if geometry_cut and mask: bool_mask = np.logical_and(mask[dut-1],geo_mask[i])
+                # elif geometry_cut:  bool_mask = geo_mask[i]  ### this is a boolean mask of the selected positions                
+                # elif mask:          bool_mask = mask[dut-1]
+                # else:       bool_mask = pd.Series(True,index=df.index)
+                # transimpedance = batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').transimpedance
+                # events_above_threshold = df[f"charge_{dut}"].loc[bool_mask]/transimpedance > threshold_charge
                 for coord_idx, XY in enumerate(coord):
+
+                    transimpedance = batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').transimpedance
+                    events_above_threshold = df[f"charge_{dut}"].loc[bool_mask]/transimpedance > threshold_charge
                     above_threshold = np.logical_and(bool_mask, events_above_threshold)
+
+                    ### I can use np.histogram here too
                     total_events_in_bin, bins_edges, _, _, _ = plot_histogram(df[f"{XY}tr_{dut-1}"].loc[bool_mask], bins=bins[coord_idx], fig_ax=(fig, axes[coord_idx,i]))
                     events_above_threshold_in_bin, _, _, _, _  = plot_histogram(df[f"{XY}tr_{dut-1}"].loc[above_threshold], bins=bins[coord_idx], fig_ax=(fig, axes[coord_idx,i]))
                     axes[coord_idx, i].clear()
@@ -721,9 +729,9 @@ def plot(df, plot_type, batch_object, this_scope, *, bins=None, bins_find_min='r
             if len(n_DUT)==1: axes = np.array(axes)[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case
             if threshold_charge is None:
                 logging.error(f"Provide a threshold charge for efficiency, {threshold_charge} was given")
-             for i,dut in enumerate(n_DUT):
+            for i,dut in enumerate(n_DUT):
                 if mask:    bool_mask = mask[dut-1]
-                elif geometry_cut: bool_mask = geometry_mask(df, bins, bins_find_min, DUT_number=dut, only_center=only_center)    ### this is a boolean mask of the selected positions                
+                elif geometry_cut: bool_mask = geometry_mask(df, bins, bins_find_min, DUT_number=dut, only_select=only_select)    ### this is a boolean mask of the selected positions                
                 else:       bool_mask = pd.Series(True,index=df.index)   # should probably be geometry_cut instead
                 transimpedance = batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').transimpedance
                 total_events_in_bin, x_edges, y_edges, _ = axes[i].hist2d(df[f"Xtr_{dut-1}"].loc[bool_mask], df[f"Ytr_{dut-1}"].loc[bool_mask], bins=bins)
