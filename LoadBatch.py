@@ -689,18 +689,9 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             if len(n_DUT)==1: axes = axes[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case            ### no doesn't work, I need more than 1 bool_mask valueù
             ### USE NP.HISTOGRAM SO I DON'T GET THE PLOT?? AND USE PLT.HIST IF I WANT TO PLOT
             
-            # for coord_idx, XY in enumerate(coord):
-            #     geo_mask[XY] = geometry_mask(df, bins, bins_find_min, DUT_number=dut, only_select=XY)
-            #     geo_mask[XY] = geometry_mask(df, bins, bins_find_min, DUT_number=dut, only_select=XY)
-            #     if geometry_cut and mask: bool_mask = np.logical_and(mask[dut-1],geo_mask[XY])
-            #     elif geometry_cut:  bool_mask = geo_mask[XY]  ### this is a boolean mask of the selected positions                
-            #     elif mask:          bool_mask = mask[dut-1]
-            #     else:       bool_mask = pd.Series(True,index=df.index)
-            # geo_mask = [geometry_mask(df, bins, bins_find_min, DUT_number=dut) for dut in n_DUT]      
             if fig_ax:  fig, axes = fig_ax
             else:       fig, axes = plt.subplots(nrows=2, ncols=len(n_DUT), figsize=(6*len(n_DUT),10), sharex=False, sharey=False, dpi=200)
             fig.tight_layout(w_pad=6, h_pad=10)
-            # if only_select=='normal': geo_mask = [geometry_mask(df, bins, bins_find_min, DUT_number=dut) for dut in n_DUT]
             
             for i,dut in enumerate(n_DUT):
                 if only_select in ('normal', 'extended'):
@@ -717,9 +708,12 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                     above_threshold = np.logical_and(bool_mask, events_above_threshold)
 
                     ### I can use np.histogram here too
-                    total_events_in_bin, bins_edges, _, _, _ = plot_histogram(df[f"{XY}tr_{dut-1}"].loc[bool_mask], bins=bins[coord_idx], fig_ax=(fig, axes[coord_idx,i]))
-                    events_above_threshold_in_bin, _, _, _, _  = plot_histogram(df[f"{XY}tr_{dut-1}"].loc[above_threshold], bins=bins[coord_idx], fig_ax=(fig, axes[coord_idx,i]))
-                    axes[coord_idx, i].clear()
+                    # total_events_in_bin, bins_edges, _, _, _ = plot_histogram(df[f"{XY}tr_{dut-1}"].loc[bool_mask], bins=bins[coord_idx], fig_ax=(fig, axes[coord_idx,i]))
+                    # events_above_threshold_in_bin, _, _, _, _  = plot_histogram(df[f"{XY}tr_{dut-1}"].loc[above_threshold], bins=bins[coord_idx], fig_ax=(fig, axes[coord_idx,i]))
+                    # axes[coord_idx, i].clear()
+                    total_events_in_bin, bins_edges = np.histogram(df[f"{XY}tr_{dut-1}"].loc[bool_mask], bins=bins[coord_idx])
+                    events_above_threshold_in_bin,m_  = np.histogram(df[f"{XY}tr_{dut-1}"].loc[above_threshold], bins=bins[coord_idx])
+
                     bins_centers = (bins_edges[:-1]+bins_edges[1:])/2
                     eff, err = efficiency_k_n(events_above_threshold_in_bin, total_events_in_bin)
                     axes[coord_idx,i].plot(bins_centers, eff, label=f"Ch{dut+1}", drawstyle='steps-mid')
