@@ -46,7 +46,7 @@ def read_pickle(file):
     return pickle_dict
 
 
-def load_batch(batch_number, oscilloscope, branches=["eventNumber", "Xtr", "Ytr", "pulseHeight", "charge", "timeCFD20", "timeCFD50", "timeCFD70"],
+def load_batch(batch_number, oscilloscope, branches=None,
               data_path=f"../Data_TestBeam/2023_May/"):
     """"
     Load all the data from the .root file of one batch and one oscilloscope into a pandas.Dataframe. \n
@@ -61,6 +61,8 @@ def load_batch(batch_number, oscilloscope, branches=["eventNumber", "Xtr", "Ytr"
     -------
     df:                 pandas.Dataframe with all the required data
     """
+    if branches is None:
+        branches = ["eventNumber", "Xtr", "Ytr", "pulseHeight", "charge", "timeCFD20", "timeCFD50", "timeCFD70"]
     columns_to_remove = ["Xtr_4","Xtr_5","Xtr_6","Xtr_7","Ytr_4","Ytr_5","Ytr_6","Ytr_7"]
     logging.info(f"Loading batch {batch_number} \t Oscilloscope {oscilloscope}")    
     dir_path = os.path.join(data_path,oscilloscope)
@@ -370,7 +372,7 @@ def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, pl
     if not peak_prominence: peak_prominence = np.max(hist)/100
     if not min_prominence:  min_prominence = np.max(hist)/100
     recursion_depth = 0  # 0 or 1, not sure which one gives 'max_recursion' tries
-    max_recursion = 10 # or 20
+    max_recursion = 20 # or 10
 
     while(recursion_depth<max_recursion):
             ### find (hopefully two) peaks and plot them
