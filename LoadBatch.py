@@ -568,18 +568,24 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
     ----------
     df:             FULL dataframe of the data to plot (each plot_type select the data it needs)
     plot_type:      type of plot, options are:
-                        '1D_Tracks':    histogram of reconstructed tracks distribution (Xtr and Ytr)
-                        '2D_Tracks':    2D plot of the reconstructed tracks
-                        'pulseHeight':  histogram of the pulseHeight of all channels (log scale)
-                        '2D_Sensors':   pulseHeight cut plot + 2D plot of tracks with cut (highlighting the sensors)
-                        '1D_Efficiency': 
-                        '2D_Efficiency':
-    batch_object:   batch object (from SensorClasses)
+                        '1D_Tracks':        histogram of reconstructed tracks distribution (Xtr and Ytr)
+                        '2D_Tracks':        2D plot of the reconstructed tracks
+                        'pulseHeight':      histogram of the pulseHeight of all channels (log scale)
+                        '2D_Sensors':       pulseHeight cut plot + 2D plot of tracks with cut (highlighting the sensors)
+                        '1D_Efficiency':    projection of the efficiency on X and Y axis respectively
+                        '2D_Efficiency':    2D plot of the efficiency 
+    batch_object:   batch object (see class Batch in SensorClasses.py)
     this_scope:     oscilloscope name (either 'S1' or 'S2')
     bins:           binning options, (int,int) or (bin_edges_list, bin_edges_list), different default for each plot_type
     bins_find_min:  binning options for the find_min_btw_peaks function (in '2D_Sensors')  
     n_DUT:          number of devices under test (3 for each Scope for May 2023)
     mask:           list of boolean arrays to plot the 2D tracks where 'mask' is True (i.e. df['Xtr'].loc[mask[DUT]])
+    geometry_cut:   boolean option if automatically apply a cut to the geometry of the sensor
+    only_select:    options for specific cuts (needs geometry_cut=True)
+                        'normal':   simple geometry cut
+                        'extended': extend the geometry cut by a fraction (20%)
+                        'XY':       geometry cut of X projection only on y axis, and Y projection only on x axis
+    threshold_charge: threshold charge for efficiency calculations (default 4fC)
     savefig:        boolean option to save the plot
     savefig_path:   folder where to save the plot
     savefig_details: optional details for the file name (e.g. distinguish cuts)
