@@ -670,7 +670,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                     logging.warning("in '2D_Sensors', No minimum found, no 2D plot")
                     axes[0,i].set_title(f"Ch{dut+1}\n{batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}", fontsize=24)
                     continue
-                plot_title = f"Ch{dut+1}, "+"cut:.1f"%minimum+f"mV \n{batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
+                plot_title = f"Ch{dut+1}, "+"cut:%.1f"%minimum+f"mV \n{batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
                 axes[0,i].set_title(plot_title, fontsize=20)
                 pulseHeight_filter = df[f"pulseHeight_{dut}"]>minimum
                 axes[1,i].hist2d(df[f"Xtr_{dut-1}"].loc[pulseHeight_filter], df[f"Ytr_{dut-1}"].loc[pulseHeight_filter],
