@@ -227,7 +227,7 @@ def charge_fit(df, dut, mask, transimpedance, p0=None, plot=True):
     covariance: covariance matrix of the fit parameters
     """
     if plot:    hist,my_bins,_,fig,ax = plot_histogram(df[f'charge_{dut}'].loc[mask]/transimpedance, bins='auto',
-                                          label=f"CHARGE: Ch{dut+1} no cut")
+                                          label=f"CHARGE: Ch{dut+1}")
     else:       hist,my_bins = np.histogram(df[f'charge_{dut}'].loc[mask]/transimpedance, bins='auto')
     bins_centers = (my_bins[1:]+my_bins[:-1])/2
     bins_centers = bins_centers.astype(np.float64)
@@ -235,8 +235,10 @@ def charge_fit(df, dut, mask, transimpedance, p0=None, plot=True):
     logging.info(f'First charge estimate: {charge}')
     if p0 is None: p0 = (charge,1,1,np.max(hist))
     param, covariance = curve_fit(pylandau.langau, bins_centers, hist, p0=p0)
-    if plot:    ax.plot(bins_centers, pylandau.langau(bins_centers, *param))
-    # if not plot: plt.close()
+    if plot:
+        ax.plot(bins_centers, pylandau.langau(bins_centers, *param),
+                label=f"$MPV$: %.0f, $\eta$: %.0f, $\sigma$: %.0f, A: %.0f" %(param[0],param[1], param[2], param[3]))
+        ax.legend(fontsize=16)
     return param, covariance
 
 
