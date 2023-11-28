@@ -459,7 +459,8 @@ def geometry_mask(df, bins, bins_find_min, DUT_number, only_select="normal"):
     bins:           bins options for  "Xtr" and "Ytr"
     bins_find_min:  bins options for 'find_min_btw_peaks()'
     DUT_number:     number of the DUT (1,2,3), corresponding to Channels 2,3,4
-    only_center:    bool, if the geometry mask should be the central 0.5x0.5 mm^2 of the sensor
+
+    ### only_center:    bool, if the geometry mask should be the central 0.5x0.5 mm^2 of the sensor
    
     Returns
     -------
@@ -492,6 +493,12 @@ def geometry_mask(df, bins, bins_find_min, DUT_number, only_select="normal"):
         case "Y":
             bool_geometry = np.logical_and(df[f"Xtr_{i}"]>left_edge, df[f"Xtr_{i}"]<right_edge)
         case "normal":
+            xgeometry = np.logical_and(df[f"Xtr_{i}"]>left_edge, df[f"Xtr_{i}"]<right_edge)
+            ygeometry = np.logical_and(df[f"Ytr_{i}"]>bottom_edge, df[f"Ytr_{i}"]<top_edge)
+            bool_geometry = np.logical_and(xgeometry, ygeometry)
+        case "extended":
+            left_edge, right_edge = extend_edges(left_edge, right_edge)
+            bottom_edge, top_edge = extend_edges(bottom_edge, top_edge)
             xgeometry = np.logical_and(df[f"Xtr_{i}"]>left_edge, df[f"Xtr_{i}"]<right_edge)
             ygeometry = np.logical_and(df[f"Ytr_{i}"]>bottom_edge, df[f"Ytr_{i}"]<top_edge)
             bool_geometry = np.logical_and(xgeometry, ygeometry)
@@ -625,7 +632,7 @@ def plot(df, plot_type, batch_object, this_scope, *, bins=None, bins_find_min='r
         case "pulseHeight":       ### PulseHeight plot
             if fig_ax:  fig, axes = fig_ax
             else:       fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(15,10), dpi=200)
-            if bins is None: bins = 'rice'
+            if bins is None: bins = 'rice'  ### default binning
             for i in n_DUT.insert(0,0):
                 sensor_label = f"sensor: {batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
                 plot_histogram(df[f"pulseHeight_{i}"], poisson_err=True, error_band=True, bins=bins, fig_ax=(fig,axes), label=sensor_label, **kwrd_arg)
@@ -672,7 +679,7 @@ def plot(df, plot_type, batch_object, this_scope, *, bins=None, bins_find_min='r
             if threshold_charge is None:
                 logging.error(f"Provide a threshold charge for efficiency, {threshold_charge} was given")
             if bins is None: bins = (200)       ### default binning
-            coord = ['X','Y']
+            # coord = ['X','Y']
             if len(n_DUT)==1: axes = axes[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case            ### no doesn't work, I need more than 1 bool_mask valueù
             ### USE NP.HISTOGRAM SO I DON'T GET THE PLOT?? AND USE PLT.HIST IF I WANT TO PLOT
             
@@ -683,20 +690,22 @@ def plot(df, plot_type, batch_object, this_scope, *, bins=None, bins_find_min='r
             #     elif geometry_cut:  bool_mask = geo_mask[XY]  ### this is a boolean mask of the selected positions                
             #     elif mask:          bool_mask = mask[dut-1]
             #     else:       bool_mask = pd.Series(True,index=df.index)
-            #     geo_mask = [geometry_mask(df, bins, bins_find_min, DUT_number=dut) for dut in n_DUT]      
+            # geo_mask = [geometry_mask(df, bins, bins_find_min, DUT_number=dut) for dut in n_DUT]      
             if fig_ax:  fig, axes = fig_ax
             else:       fig, axes = plt.subplots(nrows=2, ncols=len(n_DUT), figsize=(6*len(n_DUT),10), sharex=False, sharey=False, dpi=200)
             fig.tight_layout(w_pad=6, h_pad=10)
+            # if only_select=='normal': geo_mask = [geometry_mask(df, bins, bins_find_min, DUT_number=dut) for dut in n_DUT]
             
             for i,dut in enumerate(n_DUT):
-                # if geometry_cut and mask: bool_mask = np.logical_and(mask[dut-1],geo_mask[i])
-                # elif geometry_cut:  bool_mask = geo_mask[i]  ### this is a boolean mask of the selected positions                
-                # elif mask:          bool_mask = mask[dut-1]
-                # else:       bool_mask = pd.Series(True,index=df.index)
-                # transimpedance = batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').transimpedance
-                # events_above_threshold = df[f"charge_{dut}"].loc[bool_mask]/transimpedance > threshold_charge
-                for coord_idx, XY in enumerate(coord):
-
+                if only_select in ('normal', 'extended'):
+                    geo_mask = geometry_mask(df, bins, bins_find_min, DUT_number=dut, only_select=only_select)
+                for coord_idx, XY in enumerate(('X','Y')):  # coord = ['X','Y']
+                    if only_select=='XY':
+                        geo_mask = geometry_mask(df, bins, bins_find_min, DUT_number=dut, only_select=XY)
+                    if geometry_cut and mask: bool_mask = np.logical_and(mask[dut-1],geo_mask)
+                    elif geometry_cut:  bool_mask = geo_mask  ### this is a boolean mask of the selected positions                
+                    elif mask:          bool_mask = mask[dut-1]
+                    else:       bool_mask = pd.Series(True,index=df.index)
                     transimpedance = batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').transimpedance
                     events_above_threshold = df[f"charge_{dut}"].loc[bool_mask]/transimpedance > threshold_charge
                     above_threshold = np.logical_and(bool_mask, events_above_threshold)
