@@ -559,7 +559,7 @@ def time_mask(df, DUT_number, bins=10000, CFD_MCP=20, p0=None, sigmas=5, plot=Tr
 # def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice', n_DUT=None, mask=None, geometry_cut=False, only_center=False,
 #          fig_ax=None, savefig=False, savefig_path='../various plots', savefig_details='', fmt='svg',
 #          **kwrd_arg):
-def plot(df, plot_type, batch_object, this_scope, *, bins=None, bins_find_min='rice', n_DUT=None, mask=None, geometry_cut=False, only_select="normal", threshold_charge=None,
+def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice', n_DUT=None, mask=None, geometry_cut=False, only_select="normal", threshold_charge=4,
         fig_ax=None, savefig=False, savefig_path='../various plots', savefig_details='', fmt='svg',
         **kwrd_arg):
     """
@@ -676,8 +676,8 @@ def plot(df, plot_type, batch_object, this_scope, *, bins=None, bins_find_min='r
             title_position = 1.15
 
         case "1D_Efficiency":
-            if threshold_charge is None:
-                logging.error(f"Provide a threshold charge for efficiency, {threshold_charge} was given")
+            # if threshold_charge is None:
+            #     logging.error(f"Provide a threshold charge for efficiency, {threshold_charge} was given")
             if bins is None: bins = (200)       ### default binning
             # coord = ['X','Y']
             if len(n_DUT)==1: axes = axes[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case            ### no doesn't work, I need more than 1 bool_mask valueù
@@ -736,8 +736,8 @@ def plot(df, plot_type, batch_object, this_scope, *, bins=None, bins_find_min='r
             if bins is None: bins = (200,200)       ### default binning
             fig.tight_layout(w_pad=6, h_pad=6)
             if len(n_DUT)==1: axes = np.array(axes)[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case
-            if threshold_charge is None:
-                logging.error(f"Provide a threshold charge for efficiency, {threshold_charge} was given")
+            # if threshold_charge is None:
+            #     logging.error(f"Provide a threshold charge for efficiency, {threshold_charge} was given")
             for i,dut in enumerate(n_DUT):
                 if mask:    bool_mask = mask[dut-1]
                 elif geometry_cut: bool_mask = geometry_mask(df, bins, bins_find_min, DUT_number=dut, only_select=only_select)    ### this is a boolean mask of the selected positions                
