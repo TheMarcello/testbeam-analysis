@@ -469,6 +469,11 @@ def geometry_mask(df, bins, bins_find_min, DUT_number, only_select="normal"):
     Returns
     -------
     bool_geometry:  boolean mask of the events inside the geometry cut
+    dict:           dictionary of the edges values found:
+                        'left_edge'
+                        'right_edge'
+                        'bottom_edge'
+                        'top_edge'
     """
     i = DUT_number-1 ### index of the DUT
     try:    
@@ -509,7 +514,7 @@ def geometry_mask(df, bins, bins_find_min, DUT_number, only_select="normal"):
         case other:
             logging.warning(f"{other} is not an option, options are 'center', 'X', 'Y', 'normal'")
             return
-    return bool_geometry
+    return bool_geometry, {'left_edge':left_edge, 'right_edge':right_edge, 'bottom_edge':bottom_edge, 'top_edge':top_edge}
 
 
 def time_mask(df, DUT_number, bins=10000, CFD_MCP=20, p0=None, sigmas=5, plot=True):
@@ -563,7 +568,7 @@ def time_mask(df, DUT_number, bins=10000, CFD_MCP=20, p0=None, sigmas=5, plot=Tr
 # def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice', n_DUT=None, mask=None, geometry_cut=False, only_center=False,
 #          fig_ax=None, savefig=False, savefig_path='../various plots', savefig_details='', fmt='svg',
 #          **kwrd_arg):
-def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice', n_DUT=None, mask=None, geometry_cut=False, only_select="normal", threshold_charge=4,
+def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice', n_DUT=None, geometry_cut=False, mask=None, only_select="normal", threshold_charge=4, zoom_to_sensor=False,
         fig_ax=None, savefig=False, savefig_path='../various plots', savefig_details='', fmt='svg',
         **kwrd_arg):
     """
@@ -583,17 +588,18 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
     bins:           binning options, (int,int) or (bin_edges_list, bin_edges_list), different default for each plot_type
     bins_find_min:  binning options for the find_min_btw_peaks function (in '2D_Sensors')  
     n_DUT:          number of devices under test (3 for each Scope for May 2023)
-    mask:           list of boolean arrays to plot the 2D tracks where 'mask' is True (i.e. df['Xtr'].loc[mask[DUT]])
     geometry_cut:   boolean option if automatically apply a cut to the geometry of the sensor
+    mask:           list of boolean arrays to plot the 2D tracks where 'mask' is True (i.e. df['Xtr'].loc[mask[DUT]])
     only_select:    options for specific cuts (needs geometry_cut=True)
                         'normal':   simple geometry cut
                         'extended': extend the geometry cut by a fraction (20%)
                         'XY':       geometry cut of X projection only on y axis, and Y projection only on x axis
     threshold_charge: threshold charge for efficiency calculations (default 4fC)
+    zoom_to_sensor: boolean option to set x and/or y limits of the plot to the geometry cut
     savefig:        boolean option to save the plot
     savefig_path:   folder where to save the plot
     savefig_details: optional details for the file name (e.g. distinguish cuts)
-
+    fmt:            format of the file saved ('.jpg', '.svg', '.png' etc.)
     Returns
     -------
     fig, axes:        figure and axis objects so that more manipulation can be done
@@ -686,23 +692,18 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             title_position = 1.15
 
         case "1D_Efficiency":
-            # if threshold_charge is None:
-            #     logging.error(f"Provide a threshold charge for efficiency, {threshold_charge} was given")
             if bins is None: bins = (200)       ### default binning
-            # coord = ['X','Y']
-            if len(n_DUT)==1: axes = axes[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case            ### no doesn't work, I need more than 1 bool_mask valueù
-            ### USE NP.HISTOGRAM SO I DON'T GET THE PLOT?? AND USE PLT.HIST IF I WANT TO PLOT
-            
+            if len(n_DUT)==1: axes = axes[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case           
             if fig_ax:  fig, axes = fig_ax
             else:       fig, axes = plt.subplots(nrows=2, ncols=len(n_DUT), figsize=(6*len(n_DUT),10), sharex=False, sharey=False, dpi=200)
             fig.tight_layout(w_pad=6, h_pad=10)
             
             for i,dut in enumerate(n_DUT):
                 if only_select in ('normal', 'extended'):
-                    geo_mask = geometry_mask(df, bins, bins_find_min, DUT_number=dut, only_select=only_select)
+                    geo_mask, edges = geometry_mask(df, bins, bins_find_min, DUT_number=dut, only_select=only_select)
                 for coord_idx, XY in enumerate(('X','Y')):  # coord = ['X','Y']
                     if only_select=='XY':
-                        geo_mask = geometry_mask(df, bins, bins_find_min, DUT_number=dut, only_select=XY)
+                        geo_mask, edges = geometry_mask(df, bins, bins_find_min, DUT_number=dut, only_select=XY)
                     if geometry_cut and mask: bool_mask = np.logical_and(mask[dut-1],geo_mask)
                     elif geometry_cut:  bool_mask = geo_mask  ### this is a boolean mask of the selected positions                
                     elif mask:          bool_mask = mask[dut-1]
@@ -710,11 +711,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                     transimpedance = batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').transimpedance
                     events_above_threshold = df[f"charge_{dut}"].loc[bool_mask]/transimpedance > threshold_charge
                     above_threshold = np.logical_and(bool_mask, events_above_threshold)
-
-                    ### I can use np.histogram here too
-                    # total_events_in_bin, bins_edges, _, _, _ = plot_histogram(df[f"{XY}tr_{dut-1}"].loc[bool_mask], bins=bins[coord_idx], fig_ax=(fig, axes[coord_idx,i]))
-                    # events_above_threshold_in_bin, _, _, _, _  = plot_histogram(df[f"{XY}tr_{dut-1}"].loc[above_threshold], bins=bins[coord_idx], fig_ax=(fig, axes[coord_idx,i]))
-                    # axes[coord_idx, i].clear()
+                    
                     total_events_in_bin, bins_edges = np.histogram(df[f"{XY}tr_{dut-1}"].loc[bool_mask], bins=bins[coord_idx])
                     events_above_threshold_in_bin,m_  = np.histogram(df[f"{XY}tr_{dut-1}"].loc[above_threshold], bins=bins[coord_idx])
 
@@ -731,6 +728,9 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                     axes[coord_idx,i].set_xlabel(f"{XY} position (pixels)", fontsize=20)
                     axes[coord_idx,i].set_ylabel("Efficiency", fontsize=20)
                     axes[coord_idx,i].set_ylim(0,1)
+                    if zoom_to_sensor and geometry_cut:
+                        if XY=='X':     axes[coord_idx,i].set_xlim(edges['left_edge'],edges['right_edge'])
+                        elif XY=='Y':   axes[coord_idx,i].set_xlim(edges['bottom_edge'],edges['top_edge'])
                     axes[coord_idx,i].grid('--')
             title_position = 1.1
 
@@ -740,11 +740,9 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             if bins is None: bins = (200,200)       ### default binning
             fig.tight_layout(w_pad=6, h_pad=6)
             if len(n_DUT)==1: axes = np.array(axes)[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case
-            # if threshold_charge is None:
-            #     logging.error(f"Provide a threshold charge for efficiency, {threshold_charge} was given")
             for i,dut in enumerate(n_DUT):
                 if mask:    bool_mask = mask[dut-1]
-                elif geometry_cut: bool_mask = geometry_mask(df, bins, bins_find_min, DUT_number=dut, only_select=only_select)    ### this is a boolean mask of the selected positions                
+                elif geometry_cut: bool_mask, edges = geometry_mask(df, bins, bins_find_min, DUT_number=dut, only_select=only_select)    ### this is a boolean mask of the selected positions                
                 else:       bool_mask = pd.Series(True,index=df.index)   # should probably be geometry_cut instead
                 transimpedance = batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').transimpedance
                 total_events_in_bin, x_edges, y_edges, _ = axes[i].hist2d(df[f"Xtr_{dut-1}"].loc[bool_mask], df[f"Ytr_{dut-1}"].loc[bool_mask], bins=bins)
@@ -761,10 +759,15 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 axes[i].set_title(plot_title, fontsize=20)
                 axes[i].set_xlabel('X Position (pixels)', fontsize=20)
                 axes[i].set_ylabel('Y Position (pixels)', fontsize=20)
+                if zoom_to_sensor and geometry_cut:
+                    axes[i].set_xlim(edges['left_edge'],edges['right_edge'])
+                    axes[i].set_ylim(edges['bottom_edge'],edges['top_edge'])
                 secx = axes[i].secondary_xaxis('top', functions=(lambda x: x*PIXEL_SIZE, lambda y: y*PIXEL_SIZE))
                 secy = axes[i].secondary_yaxis('right', functions=(lambda x: x*PIXEL_SIZE, lambda y: y*PIXEL_SIZE))
                 secx.set_xlabel('mm', fontsize=20)
                 secy.set_ylabel('mm', fontsize=20)
+
+
             title_position = 1.2
             fig.colorbar(im, ax=axes.ravel().tolist(), label="Efficiency (%)")
 
