@@ -18,14 +18,14 @@ class Sensor:
     name:           name of the sensor
     dut_position:   position of the sensor (1-5)
     voltage:        voltage of the sensor [V]
-    angle:          angle of the sensor to the beam
+    angle:          angle of the sensor to the beam  ### not implemented because angles values are not consistent
     board:          name of the board on which the sensor is mounted
     fluence:        radiation given to the sensor [units?]
     transimpedance: transimpedance, it depends on the board (used to calculate charge) [units?]
     """
     def __init__(self, name, dut_position, voltage, angle=0, board=NO_BOARD, fluence=-1, transimpedance=-1):
         self.name = name
-        self.angle = angle
+        # self.angle = angle
         self.board = board
         self.dut_position = dut_position
         self.fluence = fluence
@@ -52,10 +52,10 @@ class Oscilloscope:
     
     def get_sensor(self, ch):
         match ch:
-            case 'Ch1' | 'ch1': return self.channels['Ch1']
-            case 'Ch2' | 'ch2': return self.channels['Ch2']
-            case 'Ch3' | 'ch3': return self.channels['Ch3']
-            case 'Ch4' | 'ch4': return self.channels['Ch4']
+            case 'Ch1' | 'ch1' |'Ch_1' | 'ch_1' : return self.channels['Ch1']
+            case 'Ch2' | 'ch2' |'Ch_2' | 'ch_2' : return self.channels['Ch2']
+            case 'Ch3' | 'ch3' |'Ch_3' | 'ch_3' : return self.channels['Ch3']
+            case 'Ch4' | 'ch4' |'Ch_4' | 'ch_4' : return self.channels['Ch4']
             case other:
                 logging.error(f"Wrong argument in get_sensor(): {other}")
 
