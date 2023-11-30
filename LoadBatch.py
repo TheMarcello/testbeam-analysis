@@ -739,7 +739,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
 
         case "2D_Efficiency":   ### I would like to add a mask to the efficiency plot too
             if fig_ax:  fig, axes = fig_ax
-            else:       fig, axes = plt.subplots(nrows=1, ncols=len(n_DUT), figsize=(6*len(n_DUT),6), sharex=False, sharey=True, dpi=200)
+            else:       fig, axes = plt.subplots(nrows=1, ncols=len(n_DUT), figsize=(6*len(n_DUT),6), sharex=False, sharey=False, dpi=200)
             if bins is None: bins = (200,200)       ### default binning
             fig.tight_layout(w_pad=6, h_pad=6)
             if len(n_DUT)==1: axes = np.array(axes)[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case
@@ -755,19 +755,28 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 efficiency_map = np.divide(events_above_threshold_in_bin, total_events_in_bin, where=total_events_in_bin!=0,
                                         out=np.zeros_like(events_above_threshold_in_bin))*100 # in percentage
                 axes[i].clear()
-                im = axes[i].imshow(efficiency_map.T, origin='lower', extent=[x_edges[0], x_edges[-1], y_edges[0], y_edges[-1]],
-                        aspect='equal', vmin=0, vmax=100)
+                if zoom_to_sensor and geometry_cut: ### use extent to set the limits of the plot
+                    extent = (edges['left_edge'],edges['right_edge'],edges['bottom_edge'],edges['top_edge'])
+
+                else:
+                    extent = [x_edges[0], x_edges[-1], y_edges[0], y_edges[-1]]
+                im = axes[i].imshow(efficiency_map.T, origin='lower', extent=extent,
+                        aspect='auto', vmin=0, vmax=100) # aspect='equal' or 'auto'?
+                if zoom_to_sensor and geometry_cut: 
+                    axes[i].set_xlim(edges['left_edge'],edges['right_edge'])
+                    axes[i].set_ylim(edges['bottom_edge'],edges['top_edge'])
+                
                 axes[i].grid('--')
                 plot_title = f"Ch{dut+1}\n{batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
                 axes[i].set_title(plot_title, fontsize=20)
                 axes[i].set_xlabel('X Position (pixels)', fontsize=20)
                 axes[i].set_ylabel('Y Position (pixels)', fontsize=20)
-                if zoom_to_sensor and geometry_cut:
-                    try:
-                        axes[i].set_xlim(edges['left_edge'],edges['right_edge'])
-                        axes[i].set_ylim(edges['bottom_edge'],edges['top_edge'])
-                    except:
-                        logging.error("in plot(), could not set limits to geometry_cut")
+                # if zoom_to_sensor and geometry_cut:
+                #     try:
+                #         axes[i].set_xlim(edges['left_edge'],edges['right_edge'])
+                #         axes[i].set_ylim(edges['bottom_edge'],edges['top_edge'])
+                #     except:
+                #         logging.error("in plot(), could not set limits to geometry_cut")
                 secx = axes[i].secondary_xaxis('top', functions=(lambda x: x*PIXEL_SIZE, lambda y: y*PIXEL_SIZE))
                 secy = axes[i].secondary_yaxis('right', functions=(lambda x: x*PIXEL_SIZE, lambda y: y*PIXEL_SIZE))
                 secx.set_xlabel('mm', fontsize=20)
