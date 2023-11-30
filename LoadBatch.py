@@ -729,8 +729,11 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                     axes[coord_idx,i].set_ylabel("Efficiency", fontsize=20)
                     axes[coord_idx,i].set_ylim(0,1)
                     if zoom_to_sensor and geometry_cut:
-                        if XY=='X':     axes[coord_idx,i].set_xlim(edges['left_edge'],edges['right_edge'])
-                        elif XY=='Y':   axes[coord_idx,i].set_xlim(edges['bottom_edge'],edges['top_edge'])
+                        try:
+                            if XY=='X':     axes[coord_idx,i].set_xlim(edges['left_edge'],edges['right_edge'])
+                            elif XY=='Y':   axes[coord_idx,i].set_xlim(edges['bottom_edge'],edges['top_edge'])
+                        except:
+                            logging.error("in plot(), could not set limits to geometry_cut")
                     axes[coord_idx,i].grid('--')
             title_position = 1.1
 
@@ -760,8 +763,11 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 axes[i].set_xlabel('X Position (pixels)', fontsize=20)
                 axes[i].set_ylabel('Y Position (pixels)', fontsize=20)
                 if zoom_to_sensor and geometry_cut:
-                    axes[i].set_xlim(edges['left_edge'],edges['right_edge'])
-                    axes[i].set_ylim(edges['bottom_edge'],edges['top_edge'])
+                    try:
+                        axes[i].set_xlim(edges['left_edge'],edges['right_edge'])
+                        axes[i].set_ylim(edges['bottom_edge'],edges['top_edge'])
+                    except:
+                        logging.error("in plot(), could not set limits to geometry_cut")
                 secx = axes[i].secondary_xaxis('top', functions=(lambda x: x*PIXEL_SIZE, lambda y: y*PIXEL_SIZE))
                 secy = axes[i].secondary_yaxis('right', functions=(lambda x: x*PIXEL_SIZE, lambda y: y*PIXEL_SIZE))
                 secx.set_xlabel('mm', fontsize=20)
