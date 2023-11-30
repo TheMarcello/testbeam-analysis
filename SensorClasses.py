@@ -29,6 +29,7 @@ class Sensor:
         self.board = board
         self.dut_position = dut_position
         self.fluence = fluence
+        ### I could add the temperature too, so I have both (each run and each batch)
         self.transimpedance = transimpedance
         self.voltage = voltage
 
