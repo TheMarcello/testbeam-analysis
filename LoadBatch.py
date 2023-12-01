@@ -318,7 +318,7 @@ def time_limited_kde_evaluate(kde, x_axis):
     """Evaluating a kernel density estimate on the points of x_axis, it includes a timeout error if it runs too long"""
     return kde.evaluate(x_axis)
 
-
+### I can actually try to use np.gradient instead of find_peaks
 def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, plot=True,
                        savefig=False, savefig_path='../various plots/', savefig_details='', fig_ax=None):
     """
@@ -463,7 +463,6 @@ def geometry_mask(df, bins, bins_find_min, DUT_number, only_select="normal"):
     bins:           bins options for  "Xtr" and "Ytr"
     bins_find_min:  bins options for 'find_min_btw_peaks()'
     DUT_number:     number of the DUT (1,2,3), corresponding to Channels 2,3,4
-
     ### only_center:    bool, if the geometry mask should be the central 0.5x0.5 mm^2 of the sensor
    
     Returns
@@ -564,10 +563,9 @@ def time_mask(df, DUT_number, bins=10000, CFD_MCP=20, p0=None, sigmas=5, plot=Tr
     return time_cut, {'parameters':param, 'covariance':covar, 'left_base':left_base, 'right_base':right_base} #, info ###?? this could be a dictionary with the fit parameter values or similar info
     
 
-### I want pass a Batch class object for the plotting, it would contain sensor names, transimpedance, 
-# def plot(df, plot_type, batch, *, sensors=None, bins=None, bins_find_min='rice', n_DUT=None, mask=None, geometry_cut=False, only_center=False,
-#          fig_ax=None, savefig=False, savefig_path='../various plots', savefig_details='', fmt='svg',
-#          **kwrd_arg):
+### I think the geometry_cut=True is a bit overkill and clunky:
+###     - overlap with the only_select option
+###     - really easy to define the geometry cut separately and add it as a mask (more clear too)
 def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice', n_DUT=None, geometry_cut=False, mask=None, only_select="normal", threshold_charge=4, zoom_to_sensor=False,
         fig_ax=None, savefig=False, savefig_path='../various plots', savefig_details='', fmt='svg',
         **kwrd_arg):
@@ -642,16 +640,18 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 secy = axes[i].secondary_yaxis('right', functions=(lambda x: x*PIXEL_SIZE, lambda y: y*PIXEL_SIZE))
                 secx.set_xlabel('mm', fontsize=20)
                 secy.set_ylabel('mm', fontsize=20)
-            fig.tight_layout(w_pad=6, h_pad=4)
             title_position = 1.05
+            fig.tight_layout(w_pad=6, h_pad=4)
+            fig.colorbar(im, ax=axes.ravel().tolist(), label="Reconstructed tracks")
 
         case "pulseHeight":       ### PulseHeight plot
             if fig_ax:  fig, axes = fig_ax
             else:       fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(15,10), dpi=200)
             if bins is None: bins = 'rice'  ### default binning
-            for i in n_DUT.insert(0,0):
+            # for i in n_DUT.insert(0,0):
+            for dut in n_DUT:
                 sensor_label = f"sensor: {batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
-                plot_histogram(df[f"pulseHeight_{i}"], poisson_err=True, error_band=True, bins=bins, fig_ax=(fig,axes), label=sensor_label, **kwrd_arg)
+                plot_histogram(df[f"pulseHeight_{dut}"], poisson_err=True, error_band=True, bins=bins, fig_ax=(fig,axes), label=sensor_label, **kwrd_arg)
             axes.semilogy()
             axes.set_xlabel("PulseHeight [mV]", fontsize=20)
             axes.set_ylabel("Events (log)", fontsize=20)
@@ -737,7 +737,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                     axes[coord_idx,i].grid('--')
             title_position = 1.1
 
-        case "2D_Efficiency":   ### I would like to add a mask to the efficiency plot too
+        case "2D_Efficiency":  
             if fig_ax:  fig, axes = fig_ax
             else:       fig, axes = plt.subplots(nrows=1, ncols=len(n_DUT), figsize=(6*len(n_DUT),6), sharex=False, sharey=False, dpi=200)
             if bins is None: bins = (200,200)       ### default binning
@@ -757,7 +757,6 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 axes[i].clear()
                 if zoom_to_sensor and geometry_cut: ### use extent to set the limits of the plot
                     extent = (edges['left_edge'],edges['right_edge'],edges['bottom_edge'],edges['top_edge'])
-
                 else:
                     extent = [x_edges[0], x_edges[-1], y_edges[0], y_edges[-1]]
                 im = axes[i].imshow(efficiency_map.T, origin='lower', extent=extent,
@@ -781,8 +780,6 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 secy = axes[i].secondary_yaxis('right', functions=(lambda x: x*PIXEL_SIZE, lambda y: y*PIXEL_SIZE))
                 secx.set_xlabel('mm', fontsize=20)
                 secy.set_ylabel('mm', fontsize=20)
-
-
             title_position = 1.2
             fig.colorbar(im, ax=axes.ravel().tolist(), label="Efficiency (%)")
 
