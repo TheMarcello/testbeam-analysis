@@ -26,7 +26,7 @@ PIXEL_SIZE = 0.0185 #mm
 
 def my_gauss(x, A, mu, sigma, background):
     """Custom normal distribution function + uniform background"""
-    return A * np.exp(-0.5*((x-mu)/sigma)**2) + background
+    return A * np.exp(-0.5*(x-mu)**2/sigma**2) + background
 
 
 def read_pickle(file):
@@ -542,8 +542,8 @@ def time_mask(df, DUT_number, bins=10000, CFD_MCP=20, p0=None, sigmas=5, plot=Tr
     dut = DUT_number
     if plot:    hist,my_bins,_,_,_ = plot_histogram((df[f"timeCFD50_{dut}"]-df[f"timeCFD{CFD_MCP}_0"]), bins=bins)
     else:       hist,my_bins = np.histogram((df[f"timeCFD50_{dut}"]-df[f"timeCFD{CFD_MCP}_0"]), bins=bins)
-    if p0 is None: p0 = (np.max(hist), -5e3, 100, np.average(hist))
     bins_centers = (my_bins[:-1]+my_bins[1:])/2
+    if p0 is None: p0 = (np.max(hist), bins_centers[np.argmax(hist)], 100, np.average(hist))
     try:
         param, covar = curve_fit(my_gauss, bins_centers, hist, p0=p0)
     except:
@@ -607,7 +607,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
     match plot_type:
         case "1D_Tracks":        ### 1D tracks plots
             if fig_ax:  fig, axes = fig_ax
-            else:       fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(15,6), dpi=200, sharey='all')
+            else:       fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(5*len(n_DUT),5), dpi=200, sharey='all')
             if bins is None: bins = (200,200)   ### default binning
             for dut in n_DUT:
                 sensor_label = f"sensor: {batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
@@ -624,12 +624,12 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             
         case "2D_Tracks":        ### 2D tracks plots
             if fig_ax:  fig, axes = fig_ax
-            else:       fig, axes = plt.subplots(nrows=1, ncols=len(n_DUT), figsize=(6*len(n_DUT),10), sharex='all', sharey=False, dpi=200)
+            else:       fig, axes = plt.subplots(nrows=1, ncols=len(n_DUT), figsize=(5*len(n_DUT),5), sharex='all', sharey=False, dpi=200)
             if bins is None: bins = (200,200)   ### default binning
             if len(n_DUT)==1: axes = axes[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case
             for i,dut in enumerate(n_DUT):
-                if mask:  hist, _, _, _, = axes[i].hist2d(df[f"Xtr_{dut-1}"].loc[mask[dut-1]], df[f"Ytr_{dut-1}"].loc[mask[dut-1]], bins=bins, **kwrd_arg)
-                else:       hist, _, _, _, = axes[i].hist2d(df[f"Xtr_{dut-1}"], df[f"Ytr_{dut-1}"], bins=bins, **kwrd_arg)
+                if mask:  hist, _, _, im = axes[i].hist2d(df[f"Xtr_{dut-1}"].loc[mask[dut-1]], df[f"Ytr_{dut-1}"].loc[mask[dut-1]], bins=bins, **kwrd_arg)
+                else:       hist, _, _, im = axes[i].hist2d(df[f"Xtr_{dut-1}"], df[f"Ytr_{dut-1}"], bins=bins, **kwrd_arg)
                 plot_title = f"Ch{dut+1}\n{batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
                 axes[i].grid('--')
                 axes[i].set_title(plot_title, fontsize=20)
@@ -642,7 +642,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 secy.set_ylabel('mm', fontsize=20)
             title_position = 1.05
             fig.tight_layout(w_pad=6, h_pad=4)
-            fig.colorbar(im, ax=axes.ravel().tolist(), label="Reconstructed tracks")
+            fig.colorbar(im, ax=axes.ravel().tolist(),fraction=0.046, pad=0.04, label="Reconstructed tracks")
 
         case "pulseHeight":       ### PulseHeight plot
             if fig_ax:  fig, axes = fig_ax
@@ -662,7 +662,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             
         case "2D_Sensors":        ### 2D tracks plots filtering noise out (also include pulseHeight plot)
             if fig_ax:  fig, axes = fig_ax
-            else:       fig, axes = plt.subplots(nrows=2, ncols=len(n_DUT), figsize=(6*len(n_DUT),10), sharex=False, sharey=False, dpi=200)
+            else:       fig, axes = plt.subplots(nrows=2, ncols=len(n_DUT), figsize=(5*len(n_DUT),10), sharex=False, sharey=False, dpi=200)
             if bins is None: bins = (200,200)   ### default binning
             fig.tight_layout(w_pad=6, h_pad=4)
             if len(n_DUT)==1: axes = axes[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case
@@ -695,7 +695,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             if bins is None: bins = (200)       ### default binning
             if len(n_DUT)==1: axes = axes[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case           
             if fig_ax:  fig, axes = fig_ax
-            else:       fig, axes = plt.subplots(nrows=2, ncols=len(n_DUT), figsize=(6*len(n_DUT),10), sharex=False, sharey=False, dpi=200)
+            else:       fig, axes = plt.subplots(nrows=2, ncols=len(n_DUT), figsize=(5*len(n_DUT),10), sharex=False, sharey=False, dpi=200)
             fig.tight_layout(w_pad=6, h_pad=10)
             
             for i,dut in enumerate(n_DUT):
@@ -739,7 +739,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
 
         case "2D_Efficiency":  
             if fig_ax:  fig, axes = fig_ax
-            else:       fig, axes = plt.subplots(nrows=1, ncols=len(n_DUT), figsize=(6*len(n_DUT),6), sharex=False, sharey=False, dpi=200)
+            else:       fig, axes = plt.subplots(nrows=1, ncols=len(n_DUT), figsize=(5*len(n_DUT),5), sharex=False, sharey=False, dpi=200)
             if bins is None: bins = (200,200)       ### default binning
             fig.tight_layout(w_pad=6, h_pad=6)
             if len(n_DUT)==1: axes = np.array(axes)[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case
