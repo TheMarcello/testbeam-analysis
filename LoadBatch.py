@@ -572,7 +572,7 @@ def time_mask(df, DUT_number, bins=10000, CFD_MCP=20, p0=None, sigmas=4, plot=Fa
 ###     - overlap with the only_select option
 ###     - really easy to define the geometry cut separately and add it as a mask (more clear too)
 ### maybe I make the geometry_cut into the only_select option
-def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice', n_DUT=None, geometry_cut=False, mask=None, only_select="normal", threshold_charge=4, zoom_to_sensor=False,
+def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice', n_DUT=None, geometry_cut="normal", mask=None, threshold_charge=4, zoom_to_sensor=False,
         fig_ax=None, savefig=False, savefig_path='../various plots', savefig_details='', fmt='svg',
         **kwrd_arg):
     """
@@ -592,12 +592,14 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
     bins:           binning options, (int,int) or (bin_edges_list, bin_edges_list), different default for each plot_type
     bins_find_min:  binning options for the find_min_btw_peaks function (in '2D_Sensors')  
     n_DUT:          number of devices under test (3 for each Scope for May 2023)
-    geometry_cut:   boolean option if automatically apply a cut to the geometry of the sensor
     mask:           list of boolean arrays to plot the 2D tracks where 'mask' is True (i.e. df['Xtr'].loc[mask[DUT]])
-    only_select:    options for specific cuts (needs geometry_cut=True)
-                        'normal':   simple geometry cut
-                        'extended': extend the geometry cut by a fraction (20%)
-                        'XY':       geometry cut of X projection only on y axis, and Y projection only on x axis
+    geometry_cut:   options for specific cuts (needs geometry_cut=True)
+                        'center':   central area of 0.5x0.5 mm^2
+                        'extended': 20% extended area (to study interpad area)
+                        'normal':   full sensor area 
+                        'X':        only filters on one axis (X)
+                        'Y':         "      "      "     "   (Y)
+                        False:      no geometry cut applied
     threshold_charge: threshold charge for efficiency calculations (default 4fC)
     zoom_to_sensor: boolean option to set x and/or y limits of the plot to the geometry cut
     savefig:        boolean option to save the plot
@@ -705,10 +707,10 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             fig.tight_layout(w_pad=6, h_pad=10)
             
             for i,dut in enumerate(n_DUT):
-                if only_select in ('normal', 'extended'):
-                    geo_mask, edges = geometry_mask(df, bins, bins_find_min, DUT_number=dut, only_select=only_select)
+                if geometry_cut in ('center', 'normal', 'extended'):
+                    geo_mask, edges = geometry_mask(df, bins, bins_find_min, DUT_number=dut, only_select=geometry_cut)
                 for coord_idx, XY in enumerate(('X','Y')):  # coord = ['X','Y']
-                    if only_select=='XY':
+                    if geometry_cut=='XY':
                         geo_mask, edges = geometry_mask(df, bins, bins_find_min, DUT_number=dut, only_select=XY)
                     if geometry_cut and mask: bool_mask = np.logical_and(mask[dut-1],geo_mask)
                     elif geometry_cut:  bool_mask = geo_mask  ### this is a boolean mask of the selected positions                
