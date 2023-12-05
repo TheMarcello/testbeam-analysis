@@ -516,9 +516,10 @@ def geometry_mask(df, bins, bins_find_min, DUT_number, only_select="normal"):
     return bool_geometry, {'left_edge':left_edge, 'right_edge':right_edge, 'bottom_edge':bottom_edge, 'top_edge':top_edge}
 
 
-def time_mask(df, DUT_number, bins=10000, CFD_MCP=20, p0=None, sigmas=5, plot=True):
+def time_mask(df, DUT_number, bins=10000, CFD_MCP=20, p0=None, sigmas=4, plot=False):
     """
     Creates a boolean mask using a gaussian+background fit of the time difference between DUT and MCP.
+    The fit is done in the time window -20e3 :_: 20e3
 
     Parameters
     ----------
@@ -527,9 +528,8 @@ def time_mask(df, DUT_number, bins=10000, CFD_MCP=20, p0=None, sigmas=5, plot=Tr
     bins:       binning options for the time difference
     CFD_MCP:    constant fraction discriminator for the MCP, possibles are: 20,50,70 (percentage)
     p0:         initial parameters for the gaussian fit (A, mu, sigma, background)
-    sigmas:     number of sigmas from the center to include in the time cut
-    plot:       boolean, if False plt.close() is called so that no plot is showed
-
+    sigmas:     number of sigmas from the center to include in the time cut window
+    plot:       boolean, if False: np.histogram is called instead, so that no plot is shown
     Returns
     -------
     time_cut:   boolean mask of the events within the calculated time frame 
@@ -540,8 +540,11 @@ def time_mask(df, DUT_number, bins=10000, CFD_MCP=20, p0=None, sigmas=5, plot=Tr
                     'right_base':   value of the right edge of the cut
     """
     dut = DUT_number
-    if plot:    hist,my_bins,_,_,_ = plot_histogram((df[f"timeCFD50_{dut}"]-df[f"timeCFD{CFD_MCP}_0"]), bins=bins)
-    else:       hist,my_bins = np.histogram((df[f"timeCFD50_{dut}"]-df[f"timeCFD{CFD_MCP}_0"]), bins=bins)
+    window_limit = 20e3 #ps     ### -window_limit < delta t < +window_limit
+    window_fit = np.logical_and((df[f"timeCFD50_{dut}"]-df["timeCFD20_0"]) > -window_limit,
+                                (df[f"timeCFD50_{dut}"]-df["timeCFD20_0"]) < +window_limit)
+    if plot:    hist,my_bins,_,_,_ = plot_histogram((df[f"timeCFD50_{dut}"].loc[window_fit]-df["timeCFD20_0"].loc[window_fit]), bins=bins)
+    else:       hist,my_bins = np.histogram((df[f"timeCFD50_{dut}"].loc[window_fit]-df["timeCFD20_0"].loc[window_fit]), bins=bins)
     bins_centers = (my_bins[:-1]+my_bins[1:])/2
     if p0 is None: p0 = (np.max(hist), bins_centers[np.argmax(hist)], 100, np.average(hist))
     try:
@@ -557,15 +560,13 @@ def time_mask(df, DUT_number, bins=10000, CFD_MCP=20, p0=None, sigmas=5, plot=Tr
     if plot:
         plt.xlim(param[1]-100*np.abs(param[2]), param[1]+100*np.abs(param[2]))
         plt.plot(bins_centers, my_gauss(bins_centers,*param), color='k')
-    # if not plot:
-    #     logging.info("in time_mask() plot has been closed")
-    #     plt.close()
     return time_cut, {'parameters':param, 'covariance':covar, 'left_base':left_base, 'right_base':right_base} #, info ###?? this could be a dictionary with the fit parameter values or similar info
     
 
 ### I think the geometry_cut=True is a bit overkill and clunky:
 ###     - overlap with the only_select option
 ###     - really easy to define the geometry cut separately and add it as a mask (more clear too)
+### maybe I make the geometry_cut into the only_select option
 def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice', n_DUT=None, geometry_cut=False, mask=None, only_select="normal", threshold_charge=4, zoom_to_sensor=False,
         fig_ax=None, savefig=False, savefig_path='../various plots', savefig_details='', fmt='svg',
         **kwrd_arg):
