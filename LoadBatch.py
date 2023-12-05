@@ -632,6 +632,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
         case "2D_Tracks":        ### 2D tracks plots
             if fig_ax:  fig, axes = fig_ax
             else:       fig, axes = plt.subplots(nrows=1, ncols=len(n_DUT), figsize=(6*len(n_DUT),6), sharex='all', sharey=False, dpi=200)
+            fig.tight_layout()
             if bins is None: bins = (200,200)   ### default binning
             if len(n_DUT)==1: axes = axes[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case
             for i,dut in enumerate(n_DUT):
@@ -671,7 +672,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             if fig_ax:  fig, axes = fig_ax
             else:       fig, axes = plt.subplots(nrows=2, ncols=len(n_DUT), figsize=(6*len(n_DUT),12), sharex=False, sharey=False, dpi=200)
             if bins is None: bins = (200,200)   ### default binning
-            fig.tight_layout(w_pad=6, h_pad=4)
+            fig.tight_layout(w_pad=6, h_pad=2)
             if len(n_DUT)==1: axes = axes[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case
             for i,dut in enumerate(n_DUT): 
                 print(f"DUT_{dut}")                   ### BINS: scott, rice or sqrt; stone seems slow, rice seems the fastest
@@ -748,7 +749,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             if fig_ax:  fig, axes = fig_ax
             else:       fig, axes = plt.subplots(nrows=1, ncols=len(n_DUT), figsize=(6*len(n_DUT),6), sharex=False, sharey=False, dpi=200)
             if bins is None: bins = (200,200)       ### default binning
-            fig.tight_layout(w_pad=8, h_pad=6)
+            fig.tight_layout(w_pad=10)
             if len(n_DUT)==1: axes = np.array(axes)[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case
             for i,dut in enumerate(n_DUT):
                 if geometry_cut and mask: 
@@ -782,7 +783,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 secy = axes[i].secondary_yaxis('right', functions=(lambda x: x*PIXEL_SIZE, lambda y: y*PIXEL_SIZE))
                 secx.set_xlabel('mm', fontsize=20)
                 secy.set_ylabel('mm', fontsize=20)
-            title_position = 1.25
+            title_position = 1.2
             fig.colorbar(im, ax=axes.ravel().tolist(), label="Efficiency (%)")
 
         case other:
