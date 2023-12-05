@@ -597,8 +597,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                         'center':   central area of 0.5x0.5 mm^2
                         'extended': 20% extended area (to study interpad area)
                         'normal':   full sensor area 
-                        'X':        only filters on one axis (X)
-                        'Y':         "      "      "     "   (Y)
+                        'XY':        only filters on one axis (X/Y)
                         False:      no geometry cut applied
     threshold_charge: threshold charge for efficiency calculations (default 4fC)
     zoom_to_sensor: boolean option to set x and/or y limits of the plot to the geometry cut
@@ -615,7 +614,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
     match plot_type:
         case "1D_Tracks":        ### 1D tracks plots
             if fig_ax:  fig, axes = fig_ax
-            else:       fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(5*len(n_DUT),5), dpi=200, sharey='all')
+            else:       fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(6*len(n_DUT),6), dpi=200, sharey='all')
             if bins is None: bins = (200,200)   ### default binning
             for dut in n_DUT:
                 sensor_label = f"sensor: {batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
@@ -632,7 +631,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             
         case "2D_Tracks":        ### 2D tracks plots
             if fig_ax:  fig, axes = fig_ax
-            else:       fig, axes = plt.subplots(nrows=1, ncols=len(n_DUT), figsize=(5*len(n_DUT),5), sharex='all', sharey=False, dpi=200)
+            else:       fig, axes = plt.subplots(nrows=1, ncols=len(n_DUT), figsize=(6*len(n_DUT),6), sharex='all', sharey=False, dpi=200)
             if bins is None: bins = (200,200)   ### default binning
             if len(n_DUT)==1: axes = axes[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case
             for i,dut in enumerate(n_DUT):
@@ -650,11 +649,11 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 secy.set_ylabel('mm', fontsize=20)
             title_position = 1.05
             fig.tight_layout(w_pad=6, h_pad=4)
-            fig.colorbar(im, ax=axes.ravel().tolist(),fraction=0.046, pad=0.04, label="Reconstructed tracks")
+            fig.colorbar(im, ax=axes.ravel().tolist(), fraction=0.046, pad=0.04, label="Reconstructed tracks")
 
         case "pulseHeight":       ### PulseHeight plot
             if fig_ax:  fig, axes = fig_ax
-            else:       fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(15,10), dpi=200)
+            else:       fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(10,6), dpi=200)
             if bins is None: bins = 'rice'  ### default binning
             # for i in n_DUT.insert(0,0):
             for dut in n_DUT:
@@ -670,7 +669,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             
         case "2D_Sensors":        ### 2D tracks plots filtering noise out (also include pulseHeight plot)
             if fig_ax:  fig, axes = fig_ax
-            else:       fig, axes = plt.subplots(nrows=2, ncols=len(n_DUT), figsize=(5*len(n_DUT),10), sharex=False, sharey=False, dpi=200)
+            else:       fig, axes = plt.subplots(nrows=2, ncols=len(n_DUT), figsize=(6*len(n_DUT),12), sharex=False, sharey=False, dpi=200)
             if bins is None: bins = (200,200)   ### default binning
             fig.tight_layout(w_pad=6, h_pad=4)
             if len(n_DUT)==1: axes = axes[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case
@@ -703,7 +702,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             if bins is None: bins = (200)       ### default binning
             if len(n_DUT)==1: axes = axes[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case           
             if fig_ax:  fig, axes = fig_ax
-            else:       fig, axes = plt.subplots(nrows=2, ncols=len(n_DUT), figsize=(5*len(n_DUT),10), sharex=False, sharey=False, dpi=200)
+            else:       fig, axes = plt.subplots(nrows=2, ncols=len(n_DUT), figsize=(6*len(n_DUT),12), sharex=False, sharey=False, dpi=200)
             fig.tight_layout(w_pad=6, h_pad=10)
             
             for i,dut in enumerate(n_DUT):
@@ -747,29 +746,29 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
 
         case "2D_Efficiency":  
             if fig_ax:  fig, axes = fig_ax
-            else:       fig, axes = plt.subplots(nrows=1, ncols=len(n_DUT), figsize=(5*len(n_DUT),5), sharex=False, sharey=False, dpi=200)
+            else:       fig, axes = plt.subplots(nrows=1, ncols=len(n_DUT), figsize=(6*len(n_DUT),6), sharex=False, sharey=False, dpi=200)
             if bins is None: bins = (200,200)       ### default binning
-            fig.tight_layout(w_pad=6, h_pad=6)
+            fig.tight_layout(w_pad=8, h_pad=6)
             if len(n_DUT)==1: axes = np.array(axes)[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case
             for i,dut in enumerate(n_DUT):
-                if mask:    bool_mask = mask[dut-1]
-                elif geometry_cut: bool_mask, edges = geometry_mask(df, bins, bins_find_min, DUT_number=dut, only_select=only_select)    ### this is a boolean mask of the selected positions                
-                else:       bool_mask = pd.Series(True,index=df.index)   # should probably be geometry_cut instead
+                if geometry_cut and mask: 
+                    geo_mask, edges = geometry_mask(df, bins, bins_find_min, DUT_number=dut, only_select=geometry_cut)    ### this is a boolean mask of the selected positions
+                    bool_mask = np.logical_and(mask[dut-1],geo_mask)
+                elif geometry_cut: bool_mask, edges = geometry_mask(df, bins, bins_find_min, DUT_number=dut, only_select=geometry_cut)
+                elif mask:    bool_mask = mask[dut-1]
+                else:       bool_mask = pd.Series(True,index=df.index) 
                 transimpedance = batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').transimpedance
                 total_events_in_bin, x_edges, y_edges, _ = axes[i].hist2d(df[f"Xtr_{dut-1}"].loc[bool_mask], df[f"Ytr_{dut-1}"].loc[bool_mask], bins=bins)
                 events_above_threshold = df[f"charge_{dut}"].loc[bool_mask]/transimpedance > threshold_charge
-                above_threshold = np.logical_and(bool_mask, events_above_threshold)
+                above_threshold = np.logical_and(bool_mask, events_above_threshold)  ### I THINK THIS IS REDUNDANT, maybe not ???
+                # logging.info(f"{np.all(np.array(above_threshold)==np.array(events_above_threshold))}")
                 events_above_threshold_in_bin, _, _, _ = axes[i].hist2d(df[f"Xtr_{dut-1}"].loc[above_threshold], df[f"Ytr_{dut-1}"].loc[above_threshold], bins=bins)
                 efficiency_map = np.divide(events_above_threshold_in_bin, total_events_in_bin, where=total_events_in_bin!=0,
                                         out=np.zeros_like(events_above_threshold_in_bin))*100 # in percentage
                 axes[i].clear()
-                if zoom_to_sensor and geometry_cut: ### use extent to set the limits of the plot
-                    extent = (edges['left_edge'],edges['right_edge'],edges['bottom_edge'],edges['top_edge'])
-                else:
-                    extent = [x_edges[0], x_edges[-1], y_edges[0], y_edges[-1]]
-                im = axes[i].imshow(efficiency_map.T, origin='lower', extent=extent,
-                        aspect='auto', vmin=0, vmax=100) # aspect='equal' or 'auto'?
-                if zoom_to_sensor and geometry_cut: 
+                im = axes[i].imshow(efficiency_map.T, origin='lower', extent=[x_edges[0], x_edges[-1], y_edges[0], y_edges[-1]], ### extent is full data range
+                        aspect='equal', vmin=0, vmax=100)   # aspect='equal' or 'auto'?
+                if zoom_to_sensor and geometry_cut:         ### this only sets the data shown
                     axes[i].set_xlim(edges['left_edge'],edges['right_edge'])
                     axes[i].set_ylim(edges['bottom_edge'],edges['top_edge'])
                 
@@ -778,17 +777,12 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 axes[i].set_title(plot_title, fontsize=20)
                 axes[i].set_xlabel('X Position (pixels)', fontsize=20)
                 axes[i].set_ylabel('Y Position (pixels)', fontsize=20)
-                # if zoom_to_sensor and geometry_cut:
-                #     try:
-                #         axes[i].set_xlim(edges['left_edge'],edges['right_edge'])
-                #         axes[i].set_ylim(edges['bottom_edge'],edges['top_edge'])
-                #     except:
-                #         logging.error("in plot(), could not set limits to geometry_cut")
+            
                 secx = axes[i].secondary_xaxis('top', functions=(lambda x: x*PIXEL_SIZE, lambda y: y*PIXEL_SIZE))
                 secy = axes[i].secondary_yaxis('right', functions=(lambda x: x*PIXEL_SIZE, lambda y: y*PIXEL_SIZE))
                 secx.set_xlabel('mm', fontsize=20)
                 secy.set_ylabel('mm', fontsize=20)
-            title_position = 1.2
+            title_position = 1.25
             fig.colorbar(im, ax=axes.ravel().tolist(), label="Efficiency (%)")
 
         case other:
