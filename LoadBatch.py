@@ -463,8 +463,13 @@ def geometry_mask(df, bins, bins_find_min, DUT_number, only_select="normal"):
     bins:           bins options for  "Xtr" and "Ytr"
     bins_find_min:  bins options for 'find_min_btw_peaks()'
     DUT_number:     number of the DUT (1,2,3), corresponding to Channels 2,3,4
-    ### only_center:    bool, if the geometry mask should be the central 0.5x0.5 mm^2 of the sensor
-   
+    only_select:    option to select specific subselections of the 'geometry cut'
+                        'center':   central area of 0.5x0.5 mm^2
+                        'extended': 20% extended area (to study interpad area)
+                        'normal':   full sensor area 
+                        'X':        only filters on one axis (X)
+                        'Y':         "      "      "     "   (Y)
+
     Returns
     -------
     bool_geometry:  boolean mask of the events inside the geometry cut
@@ -496,20 +501,20 @@ def geometry_mask(df, bins, bins_find_min, DUT_number, only_select="normal"):
             xgeometry = np.logical_and(df[f"Xtr_{i}"]>left_edge, df[f"Xtr_{i}"]<right_edge)
             ygeometry = np.logical_and(df[f"Ytr_{i}"]>bottom_edge, df[f"Ytr_{i}"]<top_edge)
             bool_geometry = np.logical_and(xgeometry, ygeometry)
-        case "X":
-            bool_geometry = np.logical_and(df[f"Ytr_{i}"]>bottom_edge, df[f"Ytr_{i}"]<top_edge)
-        case "Y":
-            bool_geometry = np.logical_and(df[f"Xtr_{i}"]>left_edge, df[f"Xtr_{i}"]<right_edge)
-        case "normal":
-            xgeometry = np.logical_and(df[f"Xtr_{i}"]>left_edge, df[f"Xtr_{i}"]<right_edge)
-            ygeometry = np.logical_and(df[f"Ytr_{i}"]>bottom_edge, df[f"Ytr_{i}"]<top_edge)
-            bool_geometry = np.logical_and(xgeometry, ygeometry)
         case "extended":
             left_edge, right_edge = extend_edges(left_edge, right_edge)
             bottom_edge, top_edge = extend_edges(bottom_edge, top_edge)
             xgeometry = np.logical_and(df[f"Xtr_{i}"]>left_edge, df[f"Xtr_{i}"]<right_edge)
             ygeometry = np.logical_and(df[f"Ytr_{i}"]>bottom_edge, df[f"Ytr_{i}"]<top_edge)
             bool_geometry = np.logical_and(xgeometry, ygeometry)
+        case "normal":
+            xgeometry = np.logical_and(df[f"Xtr_{i}"]>left_edge, df[f"Xtr_{i}"]<right_edge)
+            ygeometry = np.logical_and(df[f"Ytr_{i}"]>bottom_edge, df[f"Ytr_{i}"]<top_edge)
+            bool_geometry = np.logical_and(xgeometry, ygeometry)
+        case "X":
+            bool_geometry = np.logical_and(df[f"Ytr_{i}"]>bottom_edge, df[f"Ytr_{i}"]<top_edge)
+        case "Y":
+            bool_geometry = np.logical_and(df[f"Xtr_{i}"]>left_edge, df[f"Xtr_{i}"]<right_edge)
         case other:
             logging.warning(f"{other} is not an option, options are 'center', 'X', 'Y', 'normal'")
             return
