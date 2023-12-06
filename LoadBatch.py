@@ -650,7 +650,8 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 secy.set_ylabel('mm', fontsize=20)
             title_position = 1.05
             fig.tight_layout(w_pad=6, h_pad=4)
-            fig.colorbar(im, ax=axes.ravel().tolist(), fraction=0.046, pad=0.04, label="Reconstructed tracks")
+            cb = fig.colorbar(im, ax=axes.ravel().tolist(), fraction=0.046, pad=0.04)
+            cb.set_label(label="Reconstructed tracks", fontsize=16)
 
         case "pulseHeight":       ### PulseHeight plot
             if fig_ax:  fig, axes = fig_ax
@@ -698,8 +699,8 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 secx.set_xlabel('mm', fontsize=20)
                 secy.set_ylabel('mm', fontsize=20)
             title_position = 1.15
-            fig.colorbar(im, ax=axes[1], fraction=0.046, pad=0.04, label="Reconstructed tracks")
-
+            cb = fig.colorbar(im, ax=axes[1], fraction=0.046, pad=0.04)
+            cb.set_label(label="Reconstructed tracks", fontsize=16)
 
         case "1D_Efficiency":
             if bins is None: bins = (200)       ### default binning
@@ -785,7 +786,8 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 secx.set_xlabel('mm', fontsize=20)
                 secy.set_ylabel('mm', fontsize=20)
             title_position = 1.2
-            fig.colorbar(im, ax=axes.ravel().tolist(), label="Efficiency (%)")
+            cb = fig.colorbar(im, ax=axes.ravel().tolist())
+            cb.set_label(label="Efficiency (%)", fontsize=16)
 
         case other:
             logging.error(f"""{other} not a plot option. Options are:
