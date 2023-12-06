@@ -672,14 +672,14 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             if fig_ax:  fig, axes = fig_ax
             else:       fig, axes = plt.subplots(nrows=2, ncols=len(n_DUT), figsize=(6*len(n_DUT),12), sharex=False, sharey=False, dpi=200)
             if bins is None: bins = (200,200)   ### default binning
-            fig.tight_layout(w_pad=6, h_pad=2)
+            fig.tight_layout(w_pad=6, h_pad=6)
             if len(n_DUT)==1: axes = axes[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case
             for i,dut in enumerate(n_DUT): 
                 print(f"DUT_{dut}")                   ### BINS: scott, rice or sqrt; stone seems slow, rice seems the fastest
                 minimum = find_min_btw_peaks(df[f"pulseHeight_{dut}"], bins=bins_find_min, plot=True, fig_ax=(fig,axes[0,i]),
                                              savefig=False)#, savefig_details=f"_{batch}_DUT{i}"+savefig_details)
-                axes[0,i].set_xlabel('mV')
-                axes[0,i].set_ylabel('Events')
+                axes[0,i].set_xlabel('mV', fontsize=20)
+                axes[0,i].set_ylabel('Events', fontsize=20)
                 if not minimum:
                     logging.warning("in '2D_Sensors', No minimum found, no 2D plot")
                     axes[0,i].set_title(f"Ch{dut+1}\n{batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}", fontsize=24)
@@ -687,7 +687,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 plot_title = f"Ch{dut+1}, "+"cut:%.1f"%minimum+f"mV \n{batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
                 axes[0,i].set_title(plot_title, fontsize=20)
                 pulseHeight_filter = df[f"pulseHeight_{dut}"]>minimum
-                axes[1,i].hist2d(df[f"Xtr_{dut-1}"].loc[pulseHeight_filter], df[f"Ytr_{dut-1}"].loc[pulseHeight_filter],
+                _,_,_,im = axes[1,i].hist2d(df[f"Xtr_{dut-1}"].loc[pulseHeight_filter], df[f"Ytr_{dut-1}"].loc[pulseHeight_filter],
                                                 bins=bins, **kwrd_arg)
                 axes[1,i].grid('--')
                 axes[1,i].set_aspect('equal')
@@ -698,6 +698,8 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 secx.set_xlabel('mm', fontsize=20)
                 secy.set_ylabel('mm', fontsize=20)
             title_position = 1.15
+            fig.colorbar(im, ax=axes[1], fraction=0.046, pad=0.04, label="Reconstructed tracks")
+
 
         case "1D_Efficiency":
             if bins is None: bins = (200)       ### default binning
@@ -762,7 +764,6 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 total_events_in_bin, x_edges, y_edges, _ = axes[i].hist2d(df[f"Xtr_{dut-1}"].loc[bool_mask], df[f"Ytr_{dut-1}"].loc[bool_mask], bins=bins)
                 events_above_threshold = df[f"charge_{dut}"].loc[bool_mask]/transimpedance > threshold_charge
                 above_threshold = np.logical_and(bool_mask, events_above_threshold)  ### I THINK THIS IS REDUNDANT, maybe not ???
-                # logging.info(f"{np.all(np.array(above_threshold)==np.array(events_above_threshold))}")
                 events_above_threshold_in_bin, _, _, _ = axes[i].hist2d(df[f"Xtr_{dut-1}"].loc[above_threshold], df[f"Ytr_{dut-1}"].loc[above_threshold], bins=bins)
                 efficiency_map = np.divide(events_above_threshold_in_bin, total_events_in_bin, where=total_events_in_bin!=0,
                                         out=np.zeros_like(events_above_threshold_in_bin))*100 # in percentage
@@ -798,11 +799,3 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
         fig.savefig(os.path.join(savefig_path, file_name), bbox_inches="tight")
     return fig, axes
 
-    # Efficiency Xtr Ytr
-
-
-    # Efficiency 2D plot
-
-
-# if __name__ == '__main__':
-#     main()
