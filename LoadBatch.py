@@ -452,7 +452,7 @@ def find_edges(data, bins='rice', use_kde=True, plot=False):
     return left_edge, right_edge
 
 
-def geometry_mask(df, bins, bins_find_min, DUT_number, only_select="normal"):
+def geometry_mask(df, DUT_number, bins, bins_find_min='rice', only_select="normal"):
     """
     Creates a boolean mask for selecting the 2D shape of the sensor.
     If the minimum of the pulseHeight could not be found it returns all True
@@ -461,8 +461,8 @@ def geometry_mask(df, bins, bins_find_min, DUT_number, only_select="normal"):
     ----------
     df:             full dataframe because it needs pulseHeight, Xtr and Ytr
     bins:           bins options for  "Xtr" and "Ytr"
-    bins_find_min:  bins options for 'find_min_btw_peaks()'
     DUT_number:     number of the DUT (1,2,3), corresponding to Channels 2,3,4
+    bins_find_min:  bins options for 'find_min_btw_peaks()'
     only_select:    option to select specific subselections of the 'geometry cut'
                         'center':   central area of 0.5x0.5 mm^2
                         'extended': 20% extended area (to study interpad area)
