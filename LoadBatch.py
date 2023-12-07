@@ -664,10 +664,11 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             axes.semilogy()
             axes.set_xlabel("PulseHeight [mV]", fontsize=20)
             axes.set_ylabel("Events (log)", fontsize=20)
-            axes.set_title(f"PulseHeight (no cut), batch {batch_object.batch_number}, bins {bins}", fontsize=24, y=1.05)
+            ### this is redundant
+            # axes.set_title(f"PulseHeight (no cut), batch {batch_object.batch_number}, bins {bins}", fontsize=24, y=1.05)
             axes.set_xlim(left=-10)
             axes.legend(fontsize=20)
-            title_position = 1.15
+            title_position = 1.05
             
         case "2D_Sensors":        ### 2D tracks plots filtering noise out (also include pulseHeight plot)
             if fig_ax:  fig, axes = fig_ax
