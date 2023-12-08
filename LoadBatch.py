@@ -712,10 +712,10 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             
             for i,dut in enumerate(n_DUT):
                 if geometry_cut in ('center', 'normal', 'extended'):
-                    geo_mask, edges = geometry_mask(df, bins, bins_find_min, DUT_number=dut, only_select=geometry_cut)
+                    geo_mask, edges = geometry_mask(df, DUT_number=dut, bins=bins, bins_find_min=bins_find_min, only_select=geometry_cut)
                 for coord_idx, XY in enumerate(('X','Y')):  # coord = ['X','Y']
                     if geometry_cut=='XY':
-                        geo_mask, edges = geometry_mask(df, bins, bins_find_min, DUT_number=dut, only_select=XY)
+                        geo_mask, edges = geometry_mask(df, DUT_number=dut, bins=bins, bins_find_min=bins_find_min, only_select=XY)
                     if geometry_cut and mask: bool_mask = np.logical_and(mask[dut-1],geo_mask)
                     elif geometry_cut:  bool_mask = geo_mask  ### this is a boolean mask of the selected positions                
                     elif mask:          bool_mask = mask[dut-1]
@@ -757,9 +757,9 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             if len(n_DUT)==1: axes = np.array(axes)[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case
             for i,dut in enumerate(n_DUT):
                 if geometry_cut and mask: 
-                    geo_mask, edges = geometry_mask(df, bins, bins_find_min, DUT_number=dut, only_select=geometry_cut)    ### this is a boolean mask of the selected positions
+                    geo_mask, edges = geometry_mask(df, DUT_number=dut, bins=bins, bins_find_min=bins_find_min, only_select=geometry_cut)    ### this is a boolean mask of the selected positions
                     bool_mask = np.logical_and(mask[dut-1],geo_mask)
-                elif geometry_cut: bool_mask, edges = geometry_mask(df, bins, bins_find_min, DUT_number=dut, only_select=geometry_cut)
+                elif geometry_cut: bool_mask, edges = geometry_mask(df, DUT_number=dut, bins=bins, bins_find_min=bins_find_min, only_select=geometry_cut)
                 elif mask:    bool_mask = mask[dut-1]
                 else:       bool_mask = pd.Series(True,index=df.index) 
                 transimpedance = batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').transimpedance
