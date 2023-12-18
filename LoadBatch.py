@@ -581,7 +581,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
     ----------
     df:             FULL dataframe of the data to plot (each plot_type select the data it needs)
     plot_type:      type of plot, options are:
-                        '1D_Tracks':        histogram of reconstructed tracks distribution (Xtr and Ytr)
+                        '1D_Tracks':        histogram of reconstructed tracks distribution (Xtr and Ytr) ### this is probably not useful but I leave it in
                         '2D_Tracks':        2D plot of the reconstructed tracks
                         'pulseHeight':      histogram of the pulseHeight of all channels (log scale)
                         '2D_Sensors':       pulseHeight cut plot + 2D plot of tracks with cut (highlighting the sensors)
@@ -639,7 +639,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 if mask:  hist, _, _, im = axes[i].hist2d(df[f"Xtr_{dut-1}"].loc[mask[dut-1]], df[f"Ytr_{dut-1}"].loc[mask[dut-1]], bins=bins, **kwrd_arg)
                 else:       hist, _, _, im = axes[i].hist2d(df[f"Xtr_{dut-1}"], df[f"Ytr_{dut-1}"], bins=bins, **kwrd_arg)
                 plot_title = f"Ch{dut+1}\n{batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
-                axes[i].grid('--')
+                # axes[i].grid('--')
                 axes[i].set_title(plot_title, fontsize=20)
                 axes[i].set_aspect('equal')
                 axes[i].set_xlabel('pixels', fontsize=20)
@@ -702,6 +702,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             title_position = 1.15
             cb = fig.colorbar(im, ax=axes[1], fraction=0.046, pad=0.04)
             cb.set_label(label="Reconstructed tracks", fontsize=16)
+
 
         case "1D_Efficiency":
             if bins is None: bins = (200)       ### default binning
@@ -776,7 +777,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                     axes[i].set_xlim(edges['left_edge'],edges['right_edge'])
                     axes[i].set_ylim(edges['bottom_edge'],edges['top_edge'])
                 
-                axes[i].grid('--')
+                # axes[i].grid('--')
                 plot_title = f"Ch{dut+1}\n{batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
                 axes[i].set_title(plot_title, fontsize=20)
                 axes[i].set_xlabel('X Position (pixels)', fontsize=20)
