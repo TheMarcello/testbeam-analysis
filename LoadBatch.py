@@ -691,7 +691,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 pulseHeight_filter = df[f"pulseHeight_{dut}"]>minimum
                 _,_,_,im = axes[1,i].hist2d(df[f"Xtr_{dut-1}"].loc[pulseHeight_filter], df[f"Ytr_{dut-1}"].loc[pulseHeight_filter],
                                                 bins=bins, **kwrd_arg)
-                axes[1,i].grid('--')
+                # axes[1,i].grid('--')
                 axes[1,i].set_aspect('equal')
                 axes[1,i].set_xlabel('pixels', fontsize=20)
                 axes[1,i].set_ylabel('pixels', fontsize=20)
@@ -702,6 +702,14 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             title_position = 1.15
             cb = fig.colorbar(im, ax=axes[1], fraction=0.046, pad=0.04)
             cb.set_label(label="Reconstructed tracks", fontsize=16)
+
+
+        case "Time_pulseHeight":
+            
+            if fig_ax:  fig, axes = fig_ax
+            else:       fig, axes = plt.subplots(figsize=(8*len(DUTs),8), ncols=len(DUTs), dpi=150, subplot_kw={'projection':'scatter_density'}) 
+
+
 
 
         case "1D_Efficiency":
