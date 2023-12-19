@@ -1,5 +1,6 @@
 import numpy as np # NumPy
 import matplotlib.pylab as plt # Matplotlib plots
+import matplotlib.colors as colors
 # import matplotlib.patches as mpatches
 import pandas as pd # Pandas
 import uproot
@@ -572,7 +573,7 @@ def time_mask(df, DUT_number, bins=10000, CFD_MCP=20, p0=None, sigmas=4, plot=Fa
 ###     - overlap with the only_select option
 ###     - really easy to define the geometry cut separately and add it as a mask (more clear too)
 ### maybe I make the geometry_cut into the only_select option
-def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice', n_DUT=None, geometry_cut="normal", mask=None, threshold_charge=4, zoom_to_sensor=False,
+def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice', n_DUT=None, extra_info=True, geometry_cut="normal", mask=None, threshold_charge=4, zoom_to_sensor=False,
         fig_ax=None, savefig=False, savefig_path='../various plots', savefig_details='', fmt='svg',
         **kwrd_arg):
     """
@@ -585,6 +586,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                         '2D_Tracks':        2D plot of the reconstructed tracks
                         'pulseHeight':      histogram of the pulseHeight of all channels (log scale)
                         '2D_Sensors':       pulseHeight cut plot + 2D plot of tracks with cut (highlighting the sensors)
+                        'Time_pulseHeight'
                         '1D_Efficiency':    projection of the efficiency on X and Y axis respectively
                         '2D_Efficiency':    2D plot of the efficiency 
     batch_object:   batch object (see class Batch in SensorClasses.py)
@@ -592,8 +594,9 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
     bins:           binning options, (int,int) or (bin_edges_list, bin_edges_list), different default for each plot_type
     bins_find_min:  binning options for the find_min_btw_peaks function (in '2D_Sensors')  
     n_DUT:          number of devices under test (3 for each Scope for May 2023)
+    extra_info:     boolean option to have extra information on the plot        ### now only for 'Time_pulseHeight' but could be more generally useful 
     mask:           list of boolean arrays to plot the 2D tracks where 'mask' is True (i.e. df['Xtr'].loc[mask[DUT]])
-    geometry_cut:   options for specific cuts (needs geometry_cut=True)
+    geometry_cut:   options for specific cuts
                         'center':   central area of 0.5x0.5 mm^2
                         'extended': 20% extended area (to study interpad area)
                         'normal':   full sensor area 
@@ -634,7 +637,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             else:       fig, axes = plt.subplots(nrows=1, ncols=len(n_DUT), figsize=(6*len(n_DUT),6), sharex='all', sharey=False, dpi=200)
             fig.tight_layout()
             if bins is None: bins = (200,200)   ### default binning
-            if len(n_DUT)==1: axes = axes[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case
+            if len(n_DUT)==1: axes = axes[...,np.newaxis]  ### does not work in this case
             for i,dut in enumerate(n_DUT):
                 if mask:  hist, _, _, im = axes[i].hist2d(df[f"Xtr_{dut-1}"].loc[mask[dut-1]], df[f"Ytr_{dut-1}"].loc[mask[dut-1]], bins=bins, **kwrd_arg)
                 else:       hist, _, _, im = axes[i].hist2d(df[f"Xtr_{dut-1}"], df[f"Ytr_{dut-1}"], bins=bins, **kwrd_arg)
@@ -678,8 +681,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             if len(n_DUT)==1: axes = axes[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case
             for i,dut in enumerate(n_DUT): 
                 print(f"DUT_{dut}")                   ### BINS: scott, rice or sqrt; stone seems slow, rice seems the fastest
-                minimum = find_min_btw_peaks(df[f"pulseHeight_{dut}"], bins=bins_find_min, plot=True, fig_ax=(fig,axes[0,i]),
-                                             savefig=False)#, savefig_details=f"_{batch}_DUT{i}"+savefig_details)
+                minimum = find_min_btw_peaks(df[f"pulseHeight_{dut}"], bins=bins_find_min, plot=True, fig_ax=(fig,axes[0,i]), savefig=False)
                 axes[0,i].set_xlabel('mV', fontsize=20)
                 axes[0,i].set_ylabel('Events', fontsize=20)
                 if not minimum:
@@ -705,11 +707,49 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
 
 
         case "Time_pulseHeight":
-            
             if fig_ax:  fig, axes = fig_ax
-            else:       fig, axes = plt.subplots(figsize=(8*len(DUTs),8), ncols=len(DUTs), dpi=150, subplot_kw={'projection':'scatter_density'}) 
+            else:       fig, axes = plt.subplots(figsize=(8*len(n_DUT),8), ncols=len(n_DUT), dpi=150, subplot_kw={'projection':'scatter_density'}, sharey=True) 
+            xlim = (-7e3,-3e3)
+            if bins is None: bins = 10000  ### default binning
 
+            for i,dut in enumerate(n_DUT):
+                time_array = np.array(df[f'timeCFD50_{dut}']-df[f'timeCFD20_0'])
+                pulseheight_array = np.array(df[f'pulseHeight_{dut}'])
+                info = time_mask(df, dut, bins=bins, plot=False)[1]
+                left_base, right_base = info['left_base'], info['right_base']
+                pulse_cut = find_min_btw_peaks(df[f"pulseHeight_{i}"], bins=bins_find_min, plot=False)
+               
+                axes[i].axhline(pulse_cut,color='r', label="PulseHeight cut value: %.1f mV"%pulse_cut)
+                axes[i].axvline(left_base, color='g', alpha=.9, label="Time cut: %.0fps$<\Delta t<$ %.0fps"%(left_base, right_base))
+                axes[i].axvline(right_base, color='g', alpha=.9)
+                axes[i].set_xlabel(f"$\Delta t$ [ps] (DUT {dut} - MCP)", fontsize=16)
+                axes[i].set_ylabel(f"PulseHeight [mV]", fontsize=16)
+                axes[i].grid('--')
+                axes[i].legend(fontsize=16, loc='upper center', framealpha=0)
+                plot_title = f"Sensor: {batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
+                axes[i].set_title(plot_title)
 
+                im = axes[i].scatter_density(time_array, pulseheight_array, cmap='Blues', norm=colors.LogNorm(vmin=1e-3, vmax=1e3, clip=True))
+                axes[i].set_xlim(xlim)
+                ylim = axes[i].get_ylim()
+                axes[i].set_ylim(ylim[0],ylim[1]*1.1)  ### to leave space for the legend
+
+                if extra_info:
+
+                    total = len(time_array)/100  ### so I get percentage directly
+
+                    axes[i].annotate(f"%.3f"%(len(time_array[np.logical_and(time_array<left_base, pulseheight_array<pulse_cut)])/total)+"%", ((xlim[0]+left_base)/2, (2*ylim[0]+pulse_cut)/3), fontsize=16)
+                    axes[i].annotate(f"%.3f"%(len(time_array[np.logical_and(time_array>right_base, pulseheight_array<pulse_cut)])/total)+"%", ((right_base+xlim[1])/2, (2*ylim[0]+pulse_cut)/3), fontsize=16)
+                    axes[i].annotate(f"%.3f"%(len(time_array[np.logical_and(np.logical_and(time_array>left_base, time_array<right_base), pulseheight_array<pulse_cut)])/total)+"%", ((right_base+left_base)/2, (ylim[0]+pulse_cut)/2), fontsize=16)
+
+                    axes[i].annotate(f"%.3f"%(len(time_array[np.logical_and(time_array<left_base, pulseheight_array>pulse_cut)])/total)+"%", ((xlim[0]+left_base)/2, (pulse_cut+ylim[1])/2), fontsize=16)
+                    axes[i].annotate(f"%.3f"%(len(time_array[np.logical_and(time_array>right_base, pulseheight_array>pulse_cut)])/total)+"%", ((right_base+xlim[1])/2, (pulse_cut+ylim[1])/2+20), fontsize=16)
+                    axes[i].annotate(f"%.3f"%(len(time_array[np.logical_and(np.logical_and(time_array>left_base, time_array<right_base), pulseheight_array>pulse_cut)])/total)+"%", ((right_base+left_base)/2, (pulse_cut+ylim[1])/2+50), fontsize=16)
+
+            # for ax in axes:
+            #     ax.sharey(axes[0])
+            cb = fig.colorbar(im, ax=axes)
+            title_position = 1.05
 
 
         case "1D_Efficiency":
