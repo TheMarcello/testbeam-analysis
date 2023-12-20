@@ -709,7 +709,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
         case "Time_pulseHeight":
             if fig_ax:  fig, axes = fig_ax
             else:       fig, axes = plt.subplots(figsize=(8*len(n_DUT),8), ncols=len(n_DUT), dpi=150, subplot_kw={'projection':'scatter_density'}, sharey=True) 
-            xlim = (-7e3,-3e3)
+            xlim = (-8e3,-3e3)
             if bins is None: bins = 10000  ### default binning
 
             for i,dut in enumerate(n_DUT):
@@ -718,8 +718,8 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 info = time_mask(df, dut, bins=bins, plot=False)[1]
                 left_base, right_base = info['left_base'], info['right_base']
                 pulse_cut = find_min_btw_peaks(df[f"pulseHeight_{i}"], bins=bins_find_min, plot=False)
-               
-                axes[i].axhline(pulse_cut,color='r', label="PulseHeight cut value: %.1f mV"%pulse_cut)
+                if pulse_cut:   axes[i].axhline(pulse_cut, color='r', label="PulseHeight cut value: %.1f mV"%pulse_cut)
+                else:           pulse_cut = 0
                 axes[i].axvline(left_base, color='g', alpha=.9, label="Time cut: %.0fps$<\Delta t<$ %.0fps"%(left_base, right_base))
                 axes[i].axvline(right_base, color='g', alpha=.9)
                 axes[i].set_xlabel(f"$\Delta t$ [ps] (DUT {dut} - MCP)", fontsize=16)
@@ -727,7 +727,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 axes[i].grid('--')
                 axes[i].legend(fontsize=16, loc='upper center', framealpha=0)
                 plot_title = f"Sensor: {batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
-                axes[i].set_title(plot_title)
+                axes[i].set_title(plot_title, fontsize=16)
 
                 im = axes[i].scatter_density(time_array, pulseheight_array, cmap='Blues', norm=colors.LogNorm(vmin=1e-3, vmax=1e3, clip=True))
                 axes[i].set_xlim(xlim)
@@ -735,9 +735,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 axes[i].set_ylim(ylim[0],ylim[1]*1.1)  ### to leave space for the legend
 
                 if extra_info:
-
                     total = len(time_array)/100  ### so I get percentage directly
-
                     axes[i].annotate(f"%.3f"%(len(time_array[np.logical_and(time_array<left_base, pulseheight_array<pulse_cut)])/total)+"%", ((xlim[0]+left_base)/2, (2*ylim[0]+pulse_cut)/3), fontsize=16)
                     axes[i].annotate(f"%.3f"%(len(time_array[np.logical_and(time_array>right_base, pulseheight_array<pulse_cut)])/total)+"%", ((right_base+xlim[1])/2, (2*ylim[0]+pulse_cut)/3), fontsize=16)
                     axes[i].annotate(f"%.3f"%(len(time_array[np.logical_and(np.logical_and(time_array>left_base, time_array<right_base), pulseheight_array<pulse_cut)])/total)+"%", ((right_base+left_base)/2, (ylim[0]+pulse_cut)/2), fontsize=16)
@@ -756,9 +754,9 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             if bins is None: bins = (200)       ### default binning
             if len(n_DUT)==1: axes = axes[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case           
             if fig_ax:  fig, axes = fig_ax
-            else:       fig, axes = plt.subplots(nrows=2, ncols=len(n_DUT), figsize=(6*len(n_DUT),12), sharex=False, sharey=False, dpi=200)
+            else:       fig, axes = plt.subplots(nrows=2, ncols=len(n_DUT), figsize=(6*len(n_DUT),12), sharex=False, sharey=True, dpi=200)
             fig.tight_layout(w_pad=6, h_pad=10)
-            
+            ylim = (0.4, 1)
             for i,dut in enumerate(n_DUT):
                 if geometry_cut in ('center', 'normal', 'extended'):
                     geo_mask, edges = geometry_mask(df, DUT_number=dut, bins=bins, bins_find_min=bins_find_min, only_select=geometry_cut)
@@ -788,7 +786,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                     axes[coord_idx,i].set_title(plot_title, fontsize=20, y=1.05)
                     axes[coord_idx,i].set_xlabel(f"{XY} position (pixels)", fontsize=20)
                     axes[coord_idx,i].set_ylabel("Efficiency", fontsize=20)
-                    axes[coord_idx,i].set_ylim(0,1)
+                    axes[coord_idx,i].set_ylim(ylim)
                     if zoom_to_sensor and geometry_cut:
                         try:
                             if XY=='X':     axes[coord_idx,i].set_xlim(edges['left_edge'],edges['right_edge'])
