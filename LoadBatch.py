@@ -702,13 +702,13 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 secx.set_xlabel('mm', fontsize=20)
                 secy.set_ylabel('mm', fontsize=20)
             title_position = 1.15
-            cb = fig.colorbar(im, ax=axes[1], fraction=0.046, pad=0.04)
+            cb = fig.colorbar(im, ax=axes[1], fraction=0.046, pad=0.04)   ### this colorbar only counts the last 'im', not good
             cb.set_label(label="Reconstructed tracks", fontsize=16)
 
 
         case "Time_pulseHeight":
             if fig_ax:  fig, axes = fig_ax
-            else:       fig, axes = plt.subplots(figsize=(8*len(n_DUT),8), ncols=len(n_DUT), dpi=150, subplot_kw={'projection':'scatter_density'}, sharey=True) 
+            else:       fig, axes = plt.subplots(figsize=(8*len(n_DUT),8), ncols=len(n_DUT), dpi=150, subplot_kw={'projection':'scatter_density'}) 
             xlim = (-8e3,-3e3)
             if bins is None: bins = 10000  ### default binning
 
@@ -717,7 +717,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 pulseheight_array = np.array(df[f'pulseHeight_{dut}'])
                 info = time_mask(df, dut, bins=bins, plot=False)[1]
                 left_base, right_base = info['left_base'], info['right_base']
-                pulse_cut = find_min_btw_peaks(df[f"pulseHeight_{i}"], bins=bins_find_min, plot=False)
+                pulse_cut = find_min_btw_peaks(df[f"pulseHeight_{dut}"], bins=bins_find_min, plot=False)
                 if pulse_cut:   axes[i].axhline(pulse_cut, color='r', label="PulseHeight cut value: %.1f mV"%pulse_cut)
                 else:           pulse_cut = 0
                 axes[i].axvline(left_base, color='g', alpha=.9, label="Time cut: %.0fps$<\Delta t<$ %.0fps"%(left_base, right_base))
@@ -744,8 +744,8 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                     axes[i].annotate(f"%.3f"%(len(time_array[np.logical_and(time_array>right_base, pulseheight_array>pulse_cut)])/total)+"%", ((right_base+xlim[1])/2, (pulse_cut+ylim[1])/2+20), fontsize=16)
                     axes[i].annotate(f"%.3f"%(len(time_array[np.logical_and(np.logical_and(time_array>left_base, time_array<right_base), pulseheight_array>pulse_cut)])/total)+"%", ((right_base+left_base)/2, (pulse_cut+ylim[1])/2+50), fontsize=16)
 
-            # for ax in axes:
-            #     ax.sharey(axes[0])
+            for ax in axes:
+                ax.sharey(axes[0])
             cb = fig.colorbar(im, ax=axes)
             title_position = 1.05
 
