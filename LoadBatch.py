@@ -413,9 +413,7 @@ def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, pl
                 label='Mimimum: %.1f'%x_min, alpha=.7)
         ax.legend(fontsize=16)
     if savefig: fig.savefig(f"{savefig_path}find_min_btw_peaks{savefig_details}.svg")
-    # if not plot:
-    #     plt.close()
-    #     logging.info('in find_min_btw_peaks(), closing plots')
+
     return  x_min 
 
 
@@ -449,13 +447,12 @@ def find_edges(data, bins='rice', use_kde=True, plot=False):
         values = hist
     left_edge = bins_centers[np.argmax(np.gradient(values))]
     right_edge = bins_centers[np.argmin(np.gradient(values))]
-    # if not plot: plt.close()
     return left_edge, right_edge
 
 
 def geometry_mask(df, DUT_number, bins, bins_find_min='rice', only_select="normal"):
     """
-    Creates a boolean mask for selecting the 2D shape of the sensor.
+    Creates a boolean mask for selecting the 2D shape of the sensor by applying a pulseHeight cut.
     If the minimum of the pulseHeight could not be found it returns all True
 
     Parameters
@@ -569,10 +566,7 @@ def time_mask(df, DUT_number, bins=10000, CFD_MCP=20, p0=None, sigmas=4, plot=Fa
     return time_cut, {'parameters':param, 'covariance':covar, 'left_base':left_base, 'right_base':right_base} #, info ###?? this could be a dictionary with the fit parameter values or similar info
     
 
-### I think the geometry_cut=True is a bit overkill and clunky:
-###     - overlap with the only_select option
-###     - really easy to define the geometry cut separately and add it as a mask (more clear too)
-### maybe I make the geometry_cut into the only_select option
+
 def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice', n_DUT=None, extra_info=True, geometry_cut="normal", mask=None, threshold_charge=4, zoom_to_sensor=False,
         fig_ax=None, savefig=False, savefig_path='../various plots', savefig_details='', fmt='svg',
         **kwrd_arg):
@@ -715,13 +709,14 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             for i,dut in enumerate(n_DUT):
                 time_array = np.array(df[f'timeCFD50_{dut}']-df[f'timeCFD20_0'])
                 pulseheight_array = np.array(df[f'pulseHeight_{dut}'])
-                info = time_mask(df, dut, bins=bins, plot=False)[1]
-                left_base, right_base = info['left_base'], info['right_base']
                 pulse_cut = find_min_btw_peaks(df[f"pulseHeight_{dut}"], bins=bins_find_min, plot=False)
                 if pulse_cut:   axes[i].axhline(pulse_cut, color='r', label="PulseHeight cut value: %.1f mV"%pulse_cut)
                 else:           pulse_cut = 0
-                axes[i].axvline(left_base, color='g', alpha=.9, label="Time cut: %.0fps$<\Delta t<$ %.0fps"%(left_base, right_base))
-                axes[i].axvline(right_base, color='g', alpha=.9)
+                info = time_mask(df, dut, bins=bins, plot=False)[1]
+                if info is not None:
+                    left_base, right_base = info['left_base'], info['right_base']
+                    axes[i].axvline(left_base, color='g', alpha=.9, label="Time cut: %.0fps$<\Delta t<$ %.0fps"%(left_base, right_base))
+                    axes[i].axvline(right_base, color='g', alpha=.9)
                 axes[i].set_xlabel(f"$\Delta t$ [ps] (DUT {dut} - MCP)", fontsize=16)
                 axes[i].set_ylabel(f"PulseHeight [mV]", fontsize=16)
                 axes[i].grid('--')
