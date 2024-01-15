@@ -631,8 +631,11 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             else:       fig, axes = plt.subplots(nrows=1, ncols=len(n_DUT), figsize=(6*len(n_DUT),6), sharex='all', sharey=False, dpi=200)
             fig.tight_layout()
             if bins is None: bins = (200,200)   ### default binning
-            if len(n_DUT)==1: axes = axes[...,np.newaxis]  ### does not work in this case
+            if len(n_DUT)==1: axes = np.array([axes]) ### for simplicity, so I can use axes[i] for a single DUT  ### for simplicity, so I can use axes[i] for a single DUT 
             for i,dut in enumerate(n_DUT):
+                ### I'm trying to fix the error
+                # axes[i].hist2d(np.random.normal(size=100),np.random.normal(size=100))
+
                 if mask:  hist, _, _, im = axes[i].hist2d(df[f"Xtr_{dut-1}"].loc[mask[dut-1]], df[f"Ytr_{dut-1}"].loc[mask[dut-1]], bins=bins, **kwrd_arg)
                 else:       hist, _, _, im = axes[i].hist2d(df[f"Xtr_{dut-1}"], df[f"Ytr_{dut-1}"], bins=bins, **kwrd_arg)
                 plot_title = f"Ch{dut+1}\n{batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
@@ -705,6 +708,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             else:       fig, axes = plt.subplots(figsize=(8*len(n_DUT),8), ncols=len(n_DUT), dpi=150, subplot_kw={'projection':'scatter_density'}) 
             xlim = (-8e3,-3e3)
             if bins is None: bins = 10000  ### default binning
+            if len(n_DUT)==1: axes = np.array([axes]) ### for simplicity, so I can use axes[i] for a single DUT  ### for simplicity, so I can use axes[i] for a single DUT 
 
             for i,dut in enumerate(n_DUT):
                 time_array = np.array(df[f'timeCFD50_{dut}']-df[f'timeCFD20_0'])
@@ -747,9 +751,9 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
 
         case "1D_Efficiency":
             if bins is None: bins = (200)       ### default binning
-            if len(n_DUT)==1: axes = axes[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case           
             if fig_ax:  fig, axes = fig_ax
             else:       fig, axes = plt.subplots(nrows=2, ncols=len(n_DUT), figsize=(6*len(n_DUT),12), sharex=False, sharey=True, dpi=200)
+            if len(n_DUT)==1: axes = axes[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case           
             fig.tight_layout(w_pad=6, h_pad=10)
             ylim = (0.4, 1)
             for i,dut in enumerate(n_DUT):
@@ -796,7 +800,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             else:       fig, axes = plt.subplots(nrows=1, ncols=len(n_DUT), figsize=(6*len(n_DUT),6), sharex=False, sharey=False, dpi=200)
             if bins is None: bins = (200,200)       ### default binning
             fig.tight_layout(w_pad=10)
-            if len(n_DUT)==1: axes = np.array(axes)[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case
+            if len(n_DUT)==1: axes = np.array([axes]) ### for simplicity, so I can use axes[i] for a single DUT  ### for simplicity, so I can use axes[i] for a single DUT 
             for i,dut in enumerate(n_DUT):
                 if geometry_cut and mask: 
                     geo_mask, edges = geometry_mask(df, DUT_number=dut, bins=bins, bins_find_min=bins_find_min, only_select=geometry_cut)    ### this is a boolean mask of the selected positions
