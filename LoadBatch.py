@@ -567,7 +567,7 @@ def time_mask(df, DUT_number, bins=10000, CFD_MCP=20, p0=None, sigmas=4, plot=Fa
     
 
 
-def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice', n_DUT=None, extra_info=True, geometry_cut="normal", mask=None, threshold_charge=4, zoom_to_sensor=False,
+def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice', n_DUT=None, efficiency_lim=None, extra_info=True, geometry_cut="normal", mask=None, threshold_charge=4, zoom_to_sensor=False,
         fig_ax=None, savefig=False, savefig_path='../various plots', savefig_details='', fmt='svg',
         **kwrd_arg):
     """
@@ -588,6 +588,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
     bins:           binning options, (int,int) or (bin_edges_list, bin_edges_list), different default for each plot_type
     bins_find_min:  binning options for the find_min_btw_peaks function (in '2D_Sensors')  
     n_DUT:          number of devices under test (3 for each Scope for May 2023)
+    efficiency_lim: limit of the y axis for 1D efficiency plot
     extra_info:     boolean option to have extra information on the plot        ### now only for 'Time_pulseHeight' but could be more generally useful 
     mask:           list of boolean arrays to plot the 2D tracks where 'mask' is True (i.e. df['Xtr'].loc[mask[DUT]])
     geometry_cut:   options for specific cuts
@@ -755,7 +756,8 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             else:       fig, axes = plt.subplots(nrows=2, ncols=len(n_DUT), figsize=(6*len(n_DUT),12), sharex=False, sharey=True, dpi=200)
             if len(n_DUT)==1: axes = axes[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case           
             fig.tight_layout(w_pad=6, h_pad=10)
-            ylim = (0.4, 1)
+            if efficiency_lim is None: ylim = (0.4, 1)
+            else: ylim = efficiency_lim
             for i,dut in enumerate(n_DUT):
                 if geometry_cut in ('center', 'normal', 'extended'):
                     geo_mask, edges = geometry_mask(df, DUT_number=dut, bins=bins, bins_find_min=bins_find_min, only_select=geometry_cut)
