@@ -450,7 +450,7 @@ def find_edges(data, bins='rice', use_kde=True, plot=False):
     return left_edge, right_edge
 
 
-def geometry_mask(df, DUT_number, bins, bins_find_min='rice', only_select="normal"):
+def geometry_mask(df, DUT_number, bins, bins_find_min='rice', only_select="normal", use='pulseheight'):
     """
     Creates a boolean mask for selecting the 2D shape of the sensor by applying a pulseHeight cut.
     If the minimum of the pulseHeight could not be found it returns all True
@@ -467,6 +467,9 @@ def geometry_mask(df, DUT_number, bins, bins_find_min='rice', only_select="norma
                         'normal':   full sensor area 
                         'X':        only filters on one axis (X)
                         'Y':         "      "      "     "   (Y)
+    use:            option to use pulseheight or time to determine the geometry cut
+                        'pulseheight'
+                        'time'
 
     Returns
     -------
@@ -478,11 +481,15 @@ def geometry_mask(df, DUT_number, bins, bins_find_min='rice', only_select="norma
                         'top_edge'
     """
     i = DUT_number-1 ### index of the DUT
-    try:    
-        min_value = find_min_btw_peaks(df[f"pulseHeight_{i+1}"], bins=bins_find_min, plot=False)#True
-        pulseHeight_filter = df[f"pulseHeight_{i+1}"]>min_value
-        Xtr_cut = df[f"Xtr_{i}"].loc[pulseHeight_filter]       ### X tracks with applied pulseHeight
-        Ytr_cut = df[f"Ytr_{i}"].loc[pulseHeight_filter]
+    try:
+        match use:
+            case 'pulseheight':
+                min_value = find_min_btw_peaks(df[f"pulseHeight_{i+1}"], bins=bins_find_min, plot=False)#True
+                my_filter = df[f"pulseHeight_{i+1}"]>min_value
+            case 'time':
+                my_filter = time_mask(df, i, bins=5000, plot=False)[0]
+        Xtr_cut = df[f"Xtr_{i}"].loc[my_filter]       ### X tracks with applied pulseHeight
+        Ytr_cut = df[f"Ytr_{i}"].loc[my_filter]
         left_edge, right_edge = find_edges(Xtr_cut, bins=bins[0], use_kde=True)
         bottom_edge, top_edge = find_edges(Ytr_cut, bins=bins[1], use_kde=True)
     except:
@@ -567,7 +574,7 @@ def time_mask(df, DUT_number, bins=10000, CFD_MCP=20, p0=None, sigmas=4, plot=Fa
     
 
 
-def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice', n_DUT=None, efficiency_lim=None, extra_info=True, geometry_cut="normal", mask=None, threshold_charge=4, zoom_to_sensor=False,
+def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice', n_DUT=None, efficiency_lim=None, extra_info=True, geometry_cut="normal", mask=None, threshold_charge=4, use='pulseheight', zoom_to_sensor=False,
         fig_ax=None, savefig=False, savefig_path='../various plots', savefig_details='', fmt='svg',
         **kwrd_arg):
     """
@@ -598,6 +605,9 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                         'XY':        only filters on one axis (X/Y)
                         False:      no geometry cut applied
     threshold_charge: threshold charge for efficiency calculations (default 4fC)
+    use:            option to use pulseheight or time to determine the geometry cut
+                        'pulseheight'
+                        'time'
     zoom_to_sensor: boolean option to set x and/or y limits of the plot to the geometry cut
     savefig:        boolean option to save the plot
     savefig_path:   folder where to save the plot
@@ -691,7 +701,6 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 pulseHeight_filter = df[f"pulseHeight_{dut}"]>minimum
                 _,_,_,im = axes[1,i].hist2d(df[f"Xtr_{dut-1}"].loc[pulseHeight_filter], df[f"Ytr_{dut-1}"].loc[pulseHeight_filter],
                                                 bins=bins, **kwrd_arg)
-                # axes[1,i].grid('--')
                 axes[1,i].set_aspect('equal')
                 axes[1,i].set_xlabel('pixels', fontsize=20)
                 axes[1,i].set_ylabel('pixels', fontsize=20)
@@ -760,10 +769,10 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             else: ylim = efficiency_lim
             for i,dut in enumerate(n_DUT):
                 if geometry_cut in ('center', 'normal', 'extended'):
-                    geo_mask, edges = geometry_mask(df, DUT_number=dut, bins=bins, bins_find_min=bins_find_min, only_select=geometry_cut)
+                    geo_mask, edges = geometry_mask(df, DUT_number=dut, bins=bins, bins_find_min=bins_find_min, only_select=geometry_cut, use=use)
                 for coord_idx, XY in enumerate(('X','Y')):  # coord = ['X','Y']
                     if geometry_cut=='XY':
-                        geo_mask, edges = geometry_mask(df, DUT_number=dut, bins=bins, bins_find_min=bins_find_min, only_select=XY)
+                        geo_mask, edges = geometry_mask(df, DUT_number=dut, bins=bins, bins_find_min=bins_find_min, only_select=XY, use=use)
                     if geometry_cut and mask: bool_mask = np.logical_and(mask[dut-1],geo_mask)
                     elif geometry_cut:  bool_mask = geo_mask  ### this is a boolean mask of the selected positions                
                     elif mask:          bool_mask = mask[dut-1]
@@ -796,6 +805,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                             logging.error("in plot(), could not set limits to geometry_cut")
                     axes[coord_idx,i].grid('--')
             title_position = 1.1
+            savefig_details += f'(geometry cut using {use})'
 
         case "2D_Efficiency":  
             if fig_ax:  fig, axes = fig_ax
@@ -805,9 +815,9 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             if len(n_DUT)==1: axes = np.array([axes]) ### for simplicity, so I can use axes[i] for a single DUT  ### for simplicity, so I can use axes[i] for a single DUT 
             for i,dut in enumerate(n_DUT):
                 if geometry_cut and mask: 
-                    geo_mask, edges = geometry_mask(df, DUT_number=dut, bins=bins, bins_find_min=bins_find_min, only_select=geometry_cut)    ### this is a boolean mask of the selected positions
+                    geo_mask, edges = geometry_mask(df, DUT_number=dut, bins=bins, bins_find_min=bins_find_min, only_select=geometry_cut, use=use)    ### this is a boolean mask of the selected positions
                     bool_mask = np.logical_and(mask[dut-1],geo_mask)
-                elif geometry_cut: bool_mask, edges = geometry_mask(df, DUT_number=dut, bins=bins, bins_find_min=bins_find_min, only_select=geometry_cut)
+                elif geometry_cut: bool_mask, edges = geometry_mask(df, DUT_number=dut, bins=bins, bins_find_min=bins_find_min, only_select=geometry_cut, use=use)
                 elif mask:    bool_mask = mask[dut-1]
                 else:       bool_mask = pd.Series(True,index=df.index) 
                 transimpedance = batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').transimpedance
@@ -837,6 +847,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             title_position = 1.2
             cb = fig.colorbar(im, ax=axes.ravel().tolist())
             cb.set_label(label="Efficiency (%)", fontsize=16)
+            savefig_details += f'(geometry cut using {use})'
 
         case other:
             logging.error(f"""{other} not a plot option. Options are:
@@ -844,7 +855,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             return
     
     fig.suptitle(f"{plot_type}, batch: {batch_object.batch_number} {savefig_details}", fontsize=24, y=title_position)
-    plt.show()
+    # plt.show()  ### this prevents additional things to show up
     if savefig: 
         file_name = f"{plot_type}_{batch_object.batch_number}{savefig_details}.{fmt}"
         fig.savefig(os.path.join(savefig_path, file_name), bbox_inches="tight")
