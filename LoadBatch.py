@@ -2,6 +2,7 @@ import numpy as np # NumPy
 import matplotlib.pylab as plt # Matplotlib plots
 import matplotlib.colors as colors
 # import matplotlib.patches as mpatches
+from matplotlib.patches import Rectangle
 import pandas as pd # Pandas
 import uproot
 import pickle
@@ -448,6 +449,17 @@ def find_edges(data, bins='rice', use_kde=True, plot=False):
     left_edge = bins_centers[np.argmax(np.gradient(values))]
     right_edge = bins_centers[np.argmin(np.gradient(values))]
     return left_edge, right_edge
+
+
+def rectangle_from_geometry_cut(left_edge, right_edge, bottom_edge, top_edge, **kwargs):
+    """
+    Makes a Rectangle (matplotlib patches) with the geometry_cut information, so that it can be plotted
+    """
+    ### default arguments, can be overrided by user kwargs
+    default_arguments = {'facecolor':"none", 'ec':'r', 'lw':1}
+    default_arguments.update(**kwargs)
+    return Rectangle(xy=(left_edge,bottom_edge), width=(right_edge-left_edge), height=(top_edge-bottom_edge),
+                     **default_arguments)
 
 
 def geometry_mask(df, DUT_number, bins, bins_find_min='rice', only_select="normal", use='pulseheight'):
