@@ -3,6 +3,7 @@ import matplotlib.pylab as plt # Matplotlib plots
 import matplotlib.colors as colors
 # import matplotlib.patches as mpatches
 from matplotlib.patches import Rectangle
+import mpl_scatter_density
 import pandas as pd # Pandas
 import uproot
 import pickle
@@ -538,7 +539,7 @@ def geometry_mask(df, DUT_number, bins, bins_find_min='rice', only_select="norma
     return bool_geometry, {'left_edge':left_edge, 'right_edge':right_edge, 'bottom_edge':bottom_edge, 'top_edge':top_edge}
 
 
-def time_mask(df, DUT_number, bins=10000, CFD_MCP=20, p0=None, sigmas=4, plot=False):
+def time_mask(df, DUT_number, bins=10000, CFD_MCP=20, p0=None, sigmas=3, plot=False):
     """
     Creates a boolean mask using a gaussian+background fit of the time difference between DUT and MCP.
     The fit is done in the time window -20e3 :_: 20e3
@@ -643,7 +644,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             axes[0].set_title("X axis projection", fontsize=20)
             axes[1].set_title("Y axis projection", fontsize=20)
             for ax in axes:     ### modify both axes
-                ax.legend(fontsize=16)
+                ax.legend(fontsize=14)
                 ax.semilogy()
                 ax.set_xlabel('pixels', fontsize=20)
                 ax.set_ylabel('Events (log)', fontsize=20)
@@ -673,7 +674,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 secy.set_ylabel('mm', fontsize=20)
             title_position = 1.05
             fig.tight_layout(w_pad=6, h_pad=4)
-            cb = fig.colorbar(im, ax=axes.ravel().tolist(), fraction=0.046, pad=0.04)
+            cb = fig.colorbar(im, ax=axes.ravel().tolist(), fraction=0.05, pad=0.05) ### these numbers need adjusting
             cb.set_label(label="Reconstructed tracks", fontsize=16)
 
         case "pulseHeight":       ### PulseHeight plot
@@ -746,7 +747,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 axes[i].set_xlabel(f"$\Delta t$ [ps] (DUT {dut} - MCP)", fontsize=16)
                 axes[i].set_ylabel(f"PulseHeight [mV]", fontsize=16)
                 axes[i].grid('--')
-                axes[i].legend(fontsize=16, loc='upper center', framealpha=0)
+                axes[i].legend(fontsize=16, loc='best', framealpha=0)
                 plot_title = f"Sensor: {batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
                 axes[i].set_title(plot_title, fontsize=16)
 
