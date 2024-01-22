@@ -587,7 +587,7 @@ def time_mask(df, DUT_number, bins=10000, CFD_MCP=20, p0=None, sigmas=3, plot=Fa
     
 
 
-def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice', n_DUT=None, efficiency_lim=None, extra_info=True, geometry_cut="normal", mask=None, threshold_charge=4, use='pulseheight', zoom_to_sensor=False,
+def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice', n_DUT=None, efficiency_lim=None, extra_info=True, info=True, geometry_cut="normal", mask=None, threshold_charge=4, use='pulseheight', zoom_to_sensor=False,
         fig_ax=None, savefig=False, savefig_path='../various plots', savefig_details='', fmt='svg',
         **kwrd_arg):
     """
@@ -610,6 +610,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
     n_DUT:          number of devices under test (3 for each Scope for May 2023)
     efficiency_lim: limit of the y axis for 1D efficiency plot
     extra_info:     boolean option to have extra information on the plot        ### now only for 'Time_pulseHeight' but could be more generally useful 
+    info:           boolean option for standard information 
     mask:           list of boolean arrays to plot the 2D tracks where 'mask' is True (i.e. df['Xtr'].loc[mask[DUT]])
     geometry_cut:   options for specific cuts
                         'center':   central area of 0.5x0.5 mm^2
@@ -635,7 +636,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
     match plot_type:
         case "1D_Tracks":        ### 1D tracks plots
             if fig_ax:  fig, axes = fig_ax
-            else:       fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(6*len(n_DUT),6), dpi=200, sharey='all')
+            else:       fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(18,6), dpi=200, sharey='all')
             if bins is None: bins = (200,200)   ### default binning
             for dut in n_DUT:
                 sensor_label = f"sensor: {batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
@@ -643,8 +644,8 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 plot_histogram(df[f"Ytr_{dut-1}"], label=sensor_label, bins=bins[1], fig_ax=(fig,axes[1]), **kwrd_arg)
             axes[0].set_title("X axis projection", fontsize=20)
             axes[1].set_title("Y axis projection", fontsize=20)
-            for ax in axes:     ### modify both axes
-                ax.legend(fontsize=14)
+            for ax in axes:     ### modify all axes
+                ax.legend(fontsize=14, loc='lower center')
                 ax.semilogy()
                 ax.set_xlabel('pixels', fontsize=20)
                 ax.set_ylabel('Events (log)', fontsize=20)
@@ -657,13 +658,11 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             if bins is None: bins = (200,200)   ### default binning
             if len(n_DUT)==1: axes = np.array([axes]) ### for simplicity, so I can use axes[i] for a single DUT  ### for simplicity, so I can use axes[i] for a single DUT 
             for i,dut in enumerate(n_DUT):
-                ### I'm trying to fix the error
-                # axes[i].hist2d(np.random.normal(size=100),np.random.normal(size=100))
 
                 if mask:  hist, _, _, im = axes[i].hist2d(df[f"Xtr_{dut-1}"].loc[mask[dut-1]], df[f"Ytr_{dut-1}"].loc[mask[dut-1]], bins=bins, **kwrd_arg)
                 else:       hist, _, _, im = axes[i].hist2d(df[f"Xtr_{dut-1}"], df[f"Ytr_{dut-1}"], bins=bins, **kwrd_arg)
+                
                 plot_title = f"Ch{dut+1}\n{batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
-                # axes[i].grid('--')
                 axes[i].set_title(plot_title, fontsize=20)
                 axes[i].set_aspect('equal')
                 axes[i].set_xlabel('pixels', fontsize=20)
@@ -674,7 +673,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 secy.set_ylabel('mm', fontsize=20)
             title_position = 1.05
             fig.tight_layout(w_pad=6, h_pad=4)
-            cb = fig.colorbar(im, ax=axes.ravel().tolist(), fraction=0.05, pad=0.05) ### these numbers need adjusting
+            cb = fig.colorbar(im, ax=axes.ravel().tolist(), fraction=0.1/len(n_DUT), pad=0.1) ### these numbers need adjusting
             cb.set_label(label="Reconstructed tracks", fontsize=16)
 
         case "pulseHeight":       ### PulseHeight plot
@@ -728,20 +727,24 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
 
         case "Time_pulseHeight":
             if fig_ax:  fig, axes = fig_ax
-            else:       fig, axes = plt.subplots(figsize=(8*len(n_DUT),8), ncols=len(n_DUT), dpi=150, subplot_kw={'projection':'scatter_density'}) 
+            else:       fig, axes = plt.subplots(figsize=(8*len(n_DUT),8), ncols=len(n_DUT), dpi=300, subplot_kw={'projection':'scatter_density'}) 
             xlim = (-8e3,-3e3)
             if bins is None: bins = 10000  ### default binning
             if len(n_DUT)==1: axes = np.array([axes]) ### for simplicity, so I can use axes[i] for a single DUT  ### for simplicity, so I can use axes[i] for a single DUT 
 
             for i,dut in enumerate(n_DUT):
                 time_array = np.array(df[f'timeCFD50_{dut}']-df[f'timeCFD20_0'])
-                pulseheight_array = np.array(df[f'pulseHeight_{dut}'])
-                pulse_cut = find_min_btw_peaks(df[f"pulseHeight_{dut}"], bins=bins_find_min, plot=False)
-                if pulse_cut:   axes[i].axhline(pulse_cut, color='r', label="PulseHeight cut value: %.1f mV"%pulse_cut)
-                else:           pulse_cut = 0
-                info = time_mask(df, dut, bins=bins, plot=False)[1]
-                if info is not None:
-                    left_base, right_base = info['left_base'], info['right_base']
+                pulseheight_array = np.array(df[f'pulseHeight_{dut}'])                
+
+                ### only calculate pulseheight and time cut if asked
+                if info==True:
+                    pulse_cut = find_min_btw_peaks(df[f"pulseHeight_{dut}"], bins=bins_find_min, plot=False)
+                    if pulse_cut is None:
+                        pulse_cut = 0
+                    else:
+                        axes[i].axhline(pulse_cut, color='r', label="PulseHeight cut value: %.1f mV"%pulse_cut)
+                    time_info = time_mask(df, dut, bins=bins, plot=False)[1]
+                    left_base, right_base = time_info['left_base'], time_info['right_base']
                     axes[i].axvline(left_base, color='g', alpha=.9, label="Time cut: %.0fps$<\Delta t<$ %.0fps"%(left_base, right_base))
                     axes[i].axvline(right_base, color='g', alpha=.9)
                 axes[i].set_xlabel(f"$\Delta t$ [ps] (DUT {dut} - MCP)", fontsize=16)
@@ -751,7 +754,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 plot_title = f"Sensor: {batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
                 axes[i].set_title(plot_title, fontsize=16)
 
-                im = axes[i].scatter_density(time_array, pulseheight_array, cmap='Blues', norm=colors.LogNorm(vmin=1e-3, vmax=1e3, clip=True))
+                im = axes[i].scatter_density(time_array, pulseheight_array, cmap='Blues', norm=colors.LogNorm(vmin=1e-2, vmax=1e3, clip=True))
                 axes[i].set_xlim(xlim)
                 ylim = axes[i].get_ylim()
                 axes[i].set_ylim(ylim[0],ylim[1]*1.1)  ### to leave space for the legend
@@ -769,6 +772,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             for ax in axes:
                 ax.sharey(axes[0])
             cb = fig.colorbar(im, ax=axes)
+            cb.set_label(label="Events density", fontsize=14)
             title_position = 1.05
 
 
