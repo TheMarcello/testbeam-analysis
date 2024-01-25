@@ -539,7 +539,7 @@ def geometry_mask(df, DUT_number, bins, bins_find_min='rice', only_select="norma
     return bool_geometry, {'left_edge':left_edge, 'right_edge':right_edge, 'bottom_edge':bottom_edge, 'top_edge':top_edge}
 
 
-def time_mask(df, DUT_number, bins=10000, CFD_MCP=20, p0=None, sigmas=3, plot=False):
+def time_mask(df, DUT_number, bins=10000, CFD_MCP=20, mask=None, p0=None, sigmas=3, plot=False):
     """
     Creates a boolean mask using a gaussian+background fit of the time difference between DUT and MCP.
     The fit is done in the time window -20e3 :_: 20e3
@@ -550,6 +550,7 @@ def time_mask(df, DUT_number, bins=10000, CFD_MCP=20, p0=None, sigmas=3, plot=Fa
     DUT_number: number of the selected dut for the time_mask filter
     bins:       binning options for the time difference
     CFD_MCP:    constant fraction discriminator for the MCP, possibles are: 20,50,70 (percentage)
+    mask:       boolean array (only one array) to filter events where 'mask' is True (i.e. df['Xtr'].loc[mask[DUT]])
     p0:         initial parameters for the gaussian fit (A, mu, sigma, background)
     sigmas:     number of sigmas from the center to include in the time cut window
     plot:       boolean, if False: np.histogram is called instead, so that no plot is shown
@@ -566,8 +567,12 @@ def time_mask(df, DUT_number, bins=10000, CFD_MCP=20, p0=None, sigmas=3, plot=Fa
     window_limit = 20e3 #ps     ### -window_limit < delta t < +window_limit
     window_fit = np.logical_and((df[f"timeCFD50_{dut}"]-df["timeCFD20_0"]) > -window_limit,
                                 (df[f"timeCFD50_{dut}"]-df["timeCFD20_0"]) < +window_limit)
-    if plot:    hist,my_bins,_,_,_ = plot_histogram((df[f"timeCFD50_{dut}"].loc[window_fit]-df["timeCFD20_0"].loc[window_fit]), bins=bins)
-    else:       hist,my_bins = np.histogram((df[f"timeCFD50_{dut}"].loc[window_fit]-df["timeCFD20_0"].loc[window_fit]), bins=bins)
+    if mask:
+        boolean_mask = np.logical_and(window_fit, mask)
+    else:
+        boolean_mask = window_fit
+    if plot:    hist,my_bins,_,_,_ = plot_histogram((df[f"timeCFD50_{dut}"].loc[boolean_mask]-df["timeCFD20_0"].loc[boolean_mask]), bins=bins)
+    else:       hist,my_bins = np.histogram((df[f"timeCFD50_{dut}"].loc[boolean_mask]-df["timeCFD20_0"].loc[boolean_mask]), bins=bins)
     bins_centers = (my_bins[:-1]+my_bins[1:])/2
     if p0 is None: p0 = (np.max(hist), bins_centers[np.argmax(hist)], 100, np.average(hist))
     try:
@@ -583,7 +588,7 @@ def time_mask(df, DUT_number, bins=10000, CFD_MCP=20, p0=None, sigmas=3, plot=Fa
     if plot:
         plt.xlim(param[1]-100*np.abs(param[2]), param[1]+100*np.abs(param[2]))
         plt.plot(bins_centers, my_gauss(bins_centers,*param), color='k')
-    return time_cut, {'parameters':param, 'covariance':covar, 'left_base':left_base, 'right_base':right_base} #, info ###?? this could be a dictionary with the fit parameter values or similar info
+    return time_cut, {'parameters':param, 'covariance':covar, 'left_base':left_base, 'right_base':right_base} # info 
     
 
 
@@ -733,9 +738,14 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             if len(n_DUT)==1: axes = np.array([axes]) ### for simplicity, so I can use axes[i] for a single DUT  ### for simplicity, so I can use axes[i] for a single DUT 
 
             for i,dut in enumerate(n_DUT):
-                time_array = np.array(df[f'timeCFD50_{dut}']-df[f'timeCFD20_0'])
-                pulseheight_array = np.array(df[f'pulseHeight_{dut}'])                
+                if mask:
+                    time_array = np.array(df[f'timeCFD50_{dut}'].loc[mask[dut-1]]-df[f'timeCFD20_0'].loc[mask[dut-1]])
+                    pulseheight_array = np.array(df[f'pulseHeight_{dut}'].loc[mask[dut-1]])
+                else:
+                    time_array = np.array(df[f'timeCFD50_{dut}']-df[f'timeCFD20_0'])
+                    pulseheight_array = np.array(df[f'pulseHeight_{dut}'])
 
+                ### I am starting to think that this part should not be here at all
                 ### only calculate pulseheight and time cut if asked
                 if info==True:
                     pulse_cut = find_min_btw_peaks(df[f"pulseHeight_{dut}"], bins=bins_find_min, plot=False)
