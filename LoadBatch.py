@@ -831,7 +831,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                     ### calculate average only between limits of the plot
                     between_edges = np.logical_and(bins_centers>axes[coord_idx,i].get_xlim()[0], bins_centers<axes[coord_idx,i].get_xlim()[1])
                     efficiency_bar = np.average(eff[between_edges]) ### horizontal line at this efficiency %
-                    axes[coord_idx,i].axhline(efficiency_bar, label=f"Average efficiency: {efficiency_bar*100}%", color='r', alpha=0.4, linewidth=2)
+                    axes[coord_idx,i].axhline(efficiency_bar, label=f"Average efficiency: %.2f"%(efficiency_bar*100)+'%', color='r', alpha=0.4, linewidth=2)
                     axes[coord_idx,i].grid('--')
                     axes[coord_idx,i].legend(fontsize=14)
             title_position = 1.1
