@@ -567,7 +567,7 @@ def time_mask(df, DUT_number, bins=10000, CFD_MCP=20, mask=None, p0=None, sigmas
     window_limit = 20e3 #ps     ### -window_limit < delta t < +window_limit
     window_fit = np.logical_and((df[f"timeCFD50_{dut}"]-df["timeCFD20_0"]) > -window_limit,
                                 (df[f"timeCFD50_{dut}"]-df["timeCFD20_0"]) < +window_limit)
-    if mask:
+    if mask is not None:
         boolean_mask = np.logical_and(window_fit, mask)
     else:
         boolean_mask = window_fit
@@ -818,8 +818,6 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                     axes[coord_idx,i].errorbar(bins_centers, eff, yerr=sigma_coeff*err, elinewidth=1, markersize=0, linewidth=0, capsize=1.5,
                                 label=f"error: {sigma_coeff}$\sigma$")
                     plot_title = f"{XY} axis projection, Ch{dut+1}\n{batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
-                    efficiency_bar = 0.95 ### horizontal line at this efficiency %
-                    axes[coord_idx,i].axhline(efficiency_bar, label=f"{efficiency_bar*100}% efficiency", color='r', alpha=0.4, linewidth=2)
                     axes[coord_idx,i].set_title(plot_title, fontsize=20, y=1.05)
                     axes[coord_idx,i].set_xlabel(f"{XY} position (pixels)", fontsize=20)
                     axes[coord_idx,i].set_ylabel("Efficiency", fontsize=20)
@@ -830,9 +828,15 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                             elif XY=='Y':   axes[coord_idx,i].set_xlim(edges['bottom_edge'],edges['top_edge'])
                         except:
                             logging.error("in plot(), could not set limits to geometry_cut")
+                    ### calculate average only between limits of the plot
+                    between_edges = np.logical_and(bins_centers>axes[coord_idx,i].get_xlim()[0], bins_centers<axes[coord_idx,i].get_xlim()[1])
+                    efficiency_bar = np.average(eff[between_edges]) ### horizontal line at this efficiency %
+                    axes[coord_idx,i].axhline(efficiency_bar, label=f"Average efficiency: {efficiency_bar*100}%", color='r', alpha=0.4, linewidth=2)
                     axes[coord_idx,i].grid('--')
+                    axes[coord_idx,i].legend(fontsize=14)
             title_position = 1.1
             savefig_details += f'(geometry cut using {use})'
+    
 
         case "2D_Efficiency":  
             if fig_ax:  fig, axes = fig_ax
