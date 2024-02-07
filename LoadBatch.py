@@ -539,7 +539,7 @@ def geometry_mask(df, DUT_number, bins, bins_find_min='rice', only_select="norma
     return bool_geometry, {'left_edge':left_edge, 'right_edge':right_edge, 'bottom_edge':bottom_edge, 'top_edge':top_edge}
 
 
-def time_mask(df, DUT_number, bins=10000, CFD_MCP=20, mask=None, p0=None, sigmas=3, plot=False):
+def time_mask(df, DUT_number, bins=10000, CFD_MCP=20, mask=None, p0=None, sigmas=3, plot=False, savefig=False):
     """
     Creates a boolean mask using a gaussian+background fit of the time difference between DUT and MCP.
     The fit is done in the time window -20e3 :_: 20e3
@@ -554,6 +554,7 @@ def time_mask(df, DUT_number, bins=10000, CFD_MCP=20, mask=None, p0=None, sigmas
     p0:         initial parameters for the gaussian fit (A, mu, sigma, background)
     sigmas:     number of sigmas from the center to include in the time cut window
     plot:       boolean, if False: np.histogram is called instead, so that no plot is shown
+    savefig:   boolean, if not False: the fig is saved at the path 'savefig' (include file name please)
     Returns
     -------
     time_cut:   boolean mask of the events within the calculated time frame 
@@ -571,7 +572,7 @@ def time_mask(df, DUT_number, bins=10000, CFD_MCP=20, mask=None, p0=None, sigmas
         boolean_mask = np.logical_and(window_fit, mask)
     else:
         boolean_mask = window_fit
-    if plot:    hist,my_bins,_,_,_ = plot_histogram((df[f"timeCFD50_{dut}"].loc[boolean_mask]-df["timeCFD20_0"].loc[boolean_mask]), bins=bins)
+    if plot:    hist,my_bins,_,fig,ax = plot_histogram((df[f"timeCFD50_{dut}"].loc[boolean_mask]-df["timeCFD20_0"].loc[boolean_mask]), bins=bins)
     else:       hist,my_bins = np.histogram((df[f"timeCFD50_{dut}"].loc[boolean_mask]-df["timeCFD20_0"].loc[boolean_mask]), bins=bins)
     bins_centers = (my_bins[:-1]+my_bins[1:])/2
     if p0 is None: p0 = (np.max(hist), bins_centers[np.argmax(hist)], 100, np.average(hist))
@@ -586,8 +587,11 @@ def time_mask(df, DUT_number, bins=10000, CFD_MCP=20, mask=None, p0=None, sigmas
     right_cut = (df[f"timeCFD50_{dut}"]-df[f"timeCFD{CFD_MCP}_0"])<right_base
     time_cut = np.logical_and(left_cut, right_cut)
     if plot:
-        plt.xlim(param[1]-100*np.abs(param[2]), param[1]+100*np.abs(param[2]))
-        plt.plot(bins_centers, my_gauss(bins_centers,*param), color='k')
+        ax.set_xlim(param[1]-100*np.abs(param[2]), param[1]+100*np.abs(param[2]))
+        ax.plot(bins_centers, my_gauss(bins_centers,*param), color='k', label="A: %.0f, $\mu$: %.0f, $\sigma$: %.1f, BG: %.1f" %(param[0],param[1], param[2], param[3]))
+        ax.legend(fontsize=14)
+        if savefig:
+            fig.savefig(savefig)
     return time_cut, {'parameters':param, 'covariance':covar, 'left_base':left_base, 'right_base':right_base} # info 
     
 
@@ -726,7 +730,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 secx.set_xlabel('mm', fontsize=20)
                 secy.set_ylabel('mm', fontsize=20)
             title_position = 1.15
-            cb = fig.colorbar(im, ax=axes[1], fraction=0.046, pad=0.04)   ### this colorbar only counts the last 'im', not good
+            cb = fig.colorbar(im, ax=axes[1], fraction=0.1/len(n_DUT), pad=0.1)   ### this colorbar only counts the last 'im', not good
             cb.set_label(label="Reconstructed tracks", fontsize=16)
 
 
