@@ -421,7 +421,7 @@ def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, pl
 
 def find_edges(data, bins='rice', use_kde=True, plot=False):
     """
-    Finds the 'edges' of the sensor using the gradient of the hits distribution. \n
+    Finds the 'edges' of the dut (sensor) using the gradient of the hits distribution. \n
     Parameters
     ----------
     data:       data to be put into histogram to find the edges
@@ -465,7 +465,7 @@ def rectangle_from_geometry_cut(left_edge, right_edge, bottom_edge, top_edge, **
 
 def geometry_mask(df, DUT_number, bins, bins_find_min='rice', only_select="normal", use='pulseheight'):
     """
-    Creates a boolean mask for selecting the 2D shape of the sensor by applying a pulseHeight cut.
+    Creates a boolean mask for selecting the 2D shape of the dut (sensor) by applying a pulseHeight cut.
     If the minimum of the pulseHeight could not be found it returns all True
 
     Parameters
@@ -477,7 +477,7 @@ def geometry_mask(df, DUT_number, bins, bins_find_min='rice', only_select="norma
     only_select:    option to select specific subselections of the 'geometry cut'
                         'center':   central area of 0.5x0.5 mm^2
                         'extended': 20% extended area (to study interpad area)
-                        'normal':   full sensor area 
+                        'normal':   full dut area 
                         'X':        only filters on one axis (X)
                         'Y':         "      "      "     "   (Y)
     use:            option to use pulseheight or time to determine the geometry cut
@@ -608,7 +608,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                         '1D_Tracks':        histogram of reconstructed tracks distribution (Xtr and Ytr) ### this is probably not useful but I leave it in
                         '2D_Tracks':        2D plot of the reconstructed tracks
                         'pulseHeight':      histogram of the pulseHeight of all channels (log scale)
-                        '2D_Sensors':       pulseHeight cut plot + 2D plot of tracks with cut (highlighting the sensors)
+                        '2D_Sensors':       pulseHeight cut plot + 2D plot of tracks with cut (highlighting the duts)
                         'Time_pulseHeight'
                         '1D_Efficiency':    projection of the efficiency on X and Y axis respectively
                         '2D_Efficiency':    2D plot of the efficiency 
@@ -624,7 +624,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
     geometry_cut:   options for specific cuts
                         'center':   central area of 0.5x0.5 mm^2
                         'extended': 20% extended area (to study interpad area)
-                        'normal':   full sensor area 
+                        'normal':   full dut area 
                         'XY':        only filters on one axis (X/Y)
                         False:      no geometry cut applied
     threshold_charge: threshold charge for efficiency calculations (default 4fC)
@@ -649,7 +649,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             else:       fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(18,6), dpi=200, sharey='all')
             if bins is None: bins = (200,200)   ### default binning
             for dut in n_DUT:
-                sensor_label = f"sensor: {batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
+                sensor_label = f"DUT: {batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
                 plot_histogram(df[f"Xtr_{dut-1}"], label=sensor_label, bins=bins[0], fig_ax=(fig,axes[0]), **kwrd_arg)
                 plot_histogram(df[f"Ytr_{dut-1}"], label=sensor_label, bins=bins[1], fig_ax=(fig,axes[1]), **kwrd_arg)
             axes[0].set_title("X axis projection", fontsize=20)
@@ -692,7 +692,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             if bins is None: bins = 'rice'  ### default binning
             # for i in n_DUT.insert(0,0):
             for dut in n_DUT:
-                sensor_label = f"sensor: {batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
+                sensor_label = f"DUT: {batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
                 plot_histogram(df[f"pulseHeight_{dut}"], poisson_err=True, error_band=True, bins=bins, fig_ax=(fig,axes), label=sensor_label, **kwrd_arg)
             axes.semilogy()
             axes.set_xlabel("PulseHeight [mV]", fontsize=20)
@@ -766,7 +766,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 axes[i].set_ylabel(f"PulseHeight [mV]", fontsize=16)
                 axes[i].grid('--')
                 axes[i].legend(fontsize=16, loc='best', framealpha=0)
-                plot_title = f"Sensor: {batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
+                plot_title = f"DUT: {batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
                 axes[i].set_title(plot_title, fontsize=16)
 
                 im = axes[i].scatter_density(time_array, pulseheight_array, cmap='Blues', norm=colors.LogNorm(vmin=1e-2, vmax=1e3, clip=True))
