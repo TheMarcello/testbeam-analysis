@@ -596,7 +596,7 @@ def time_mask(df, DUT_number, bins=10000, CFD_MCP=20, mask=None, p0=None, sigmas
     
 
 
-def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice', n_DUT=None, efficiency_lim=None, extra_info=True, info=True, geometry_cut="normal", mask=None, threshold_charge=4, use='pulseheight', zoom_to_sensor=False,
+def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice', n_DUT=None, efficiency_lim=None, extra_info=True, info=True, geometry_cut="normal", mask=None, threshold_charge=4, transimpedance=None, use='pulseheight', zoom_to_sensor=False,
         fig_ax=None, savefig=False, savefig_path='../various plots', savefig_details='', fmt='svg',
         **kwrd_arg):
     """
@@ -628,6 +628,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                         'XY':        only filters on one axis (X/Y)
                         False:      no geometry cut applied
     threshold_charge: threshold charge for efficiency calculations (default 4fC)
+    transimpedance: manually change the transimpedance values
     use:            option to use pulseheight or time to determine the geometry cut
                         'pulseheight'
                         'time'
@@ -808,7 +809,8 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                     elif geometry_cut:  bool_mask = geo_mask  ### this is a boolean mask of the selected positions                
                     elif mask:          bool_mask = mask[dut-1]
                     else:       bool_mask = pd.Series(True,index=df.index)
-                    transimpedance = batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').transimpedance
+                    if transimpedance is None:
+                        transimpedance = batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').transimpedance
                     events_above_threshold = df[f"charge_{dut}"].loc[bool_mask]/transimpedance > threshold_charge
                     above_threshold = np.logical_and(bool_mask, events_above_threshold)
                     
@@ -839,7 +841,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                     axes[coord_idx,i].grid('--')
                     axes[coord_idx,i].legend(fontsize=14)
             title_position = 1.1
-            savefig_details += f'(geometry cut using {use})'
+            # savefig_details += f'(geometry cut using {use})'
     
 
         case "2D_Efficiency":  
@@ -855,7 +857,8 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 elif geometry_cut: bool_mask, edges = geometry_mask(df, DUT_number=dut, bins=bins, bins_find_min=bins_find_min, only_select=geometry_cut, use=use)
                 elif mask:    bool_mask = mask[dut-1]
                 else:       bool_mask = pd.Series(True,index=df.index) 
-                transimpedance = batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').transimpedance
+                if transimpedance is None:
+                    transimpedance = batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').transimpedance
                 total_events_in_bin, x_edges, y_edges, _ = axes[i].hist2d(df[f"Xtr_{dut-1}"].loc[bool_mask], df[f"Ytr_{dut-1}"].loc[bool_mask], bins=bins)
                 events_above_threshold = df[f"charge_{dut}"].loc[bool_mask]/transimpedance > threshold_charge
                 above_threshold = np.logical_and(bool_mask, events_above_threshold)  ### I THINK THIS IS REDUNDANT, maybe not ???
@@ -880,9 +883,9 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 secx.set_xlabel('mm', fontsize=20)
                 secy.set_ylabel('mm', fontsize=20)
             title_position = 1.2
-            cb = fig.colorbar(im, ax=axes.ravel().tolist())
+            cb = fig.colorbar(im, ax=axes.ravel().tolist(), fraction=0.1/len(n_DUT), pad=0.2)
             cb.set_label(label="Efficiency (%)", fontsize=16)
-            savefig_details += f'(geometry cut using {use})'
+            # savefig_details += f'(geometry cut using {use})'
 
         case other:
             logging.error(f"""{other} not a plot option. Options are:
