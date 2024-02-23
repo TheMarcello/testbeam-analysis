@@ -91,7 +91,7 @@ class Batch:
         Map of each board names for each batch
         same thing for the fluence
         """
-        none = ' '
+        none = NO_BOARD
         batch = self.batch_number        
         for S,scope in self.S.items():
                ### default to zero because most of them are unirradiated and not angled
