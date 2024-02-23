@@ -539,17 +539,17 @@ def geometry_mask(df, DUT_number, bins, bins_find_min='rice', only_select="norma
     return bool_geometry, {'left_edge':left_edge, 'right_edge':right_edge, 'bottom_edge':bottom_edge, 'top_edge':top_edge}
 
 
-def time_mask(df, DUT_number, bins=10000, CFD_MCP=20, mask=None, p0=None, sigmas=3, plot=False, savefig=False):
+def time_mask(df, DUT_number, bins=10000, mask=None, p0=None, sigmas=3, plot=False, savefig=False):
     """
     Creates a boolean mask using a gaussian+background fit of the time difference between DUT and MCP.
     The fit is done in the time window -20e3 :_: 20e3
 
     Parameters
     ----------
-    df:         dataframe containing the 'timeCFD50_dut' and 'timeCFD20_0'
+    df:         dataframe containing the 'timeCFD50_0' and 'timeCFD20_dut'
     DUT_number: number of the selected dut for the time_mask filter
     bins:       binning options for the time difference
-    CFD_MCP:    constant fraction discriminator for the MCP, possibles are: 20,50,70 (percentage)
+### [REMOVED]  CFD_MCP:    constant fraction discriminator for the MCP, possibles are: 20,50,70 (percentage)
     mask:       boolean array (only one array) to filter events where 'mask' is True (i.e. df['Xtr'].loc[mask[DUT]])
     p0:         initial parameters for the gaussian fit (A, mu, sigma, background)
     sigmas:     number of sigmas from the center to include in the time cut window
@@ -566,14 +566,14 @@ def time_mask(df, DUT_number, bins=10000, CFD_MCP=20, mask=None, p0=None, sigmas
     """
     dut = DUT_number
     window_limit = 20e3 #ps     ### -window_limit < delta t < +window_limit
-    window_fit = np.logical_and((df[f"timeCFD50_{dut}"]-df["timeCFD20_0"]) > -window_limit,
-                                (df[f"timeCFD50_{dut}"]-df["timeCFD20_0"]) < +window_limit)
+    window_fit = np.logical_and((df[f"timeCFD20_{dut}"]-df["timeCFD50_0"]) > -window_limit,
+                                (df[f"timeCFD20_{dut}"]-df["timeCFD50_0"]) < +window_limit)
     if mask is not None:
         boolean_mask = np.logical_and(window_fit, mask)
     else:
         boolean_mask = window_fit
-    if plot:    hist,my_bins,_,fig,ax = plot_histogram((df[f"timeCFD50_{dut}"].loc[boolean_mask]-df["timeCFD20_0"].loc[boolean_mask]), bins=bins)
-    else:       hist,my_bins = np.histogram((df[f"timeCFD50_{dut}"].loc[boolean_mask]-df["timeCFD20_0"].loc[boolean_mask]), bins=bins)
+    if plot:    hist,my_bins,_,fig,ax = plot_histogram((df[f"timeCFD20_{dut}"].loc[boolean_mask]-df["timeCFD50_0"].loc[boolean_mask]), bins=bins)
+    else:       hist,my_bins = np.histogram((df[f"timeCFD20_{dut}"].loc[boolean_mask]-df["timeCFD50_0"].loc[boolean_mask]), bins=bins)
     bins_centers = (my_bins[:-1]+my_bins[1:])/2
     if p0 is None: p0 = (np.max(hist), bins_centers[np.argmax(hist)], 100, np.average(hist))
     try:
@@ -583,8 +583,8 @@ def time_mask(df, DUT_number, bins=10000, CFD_MCP=20, mask=None, p0=None, sigmas
         return pd.Series(True, index=df.index), None
     logging.info(f"in 'time_mask()': Fit parameters {param}")
     left_base, right_base = param[1]-sigmas*np.abs(param[2]), param[1]+sigmas*np.abs(param[2])
-    left_cut = (df[f"timeCFD50_{dut}"]-df[f"timeCFD{CFD_MCP}_0"])>left_base
-    right_cut = (df[f"timeCFD50_{dut}"]-df[f"timeCFD{CFD_MCP}_0"])<right_base
+    left_cut = (df[f"timeCFD20_{dut}"]-df[f"timeCFD50_0"])>left_base
+    right_cut = (df[f"timeCFD20_{dut}"]-df[f"timeCFD50_0"])<right_base
     time_cut = np.logical_and(left_cut, right_cut)
     if plot:
         ax.set_xlim(param[1]-100*np.abs(param[2]), param[1]+100*np.abs(param[2]))
@@ -744,10 +744,10 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
 
             for i,dut in enumerate(n_DUT):
                 if mask:
-                    time_array = np.array(df[f'timeCFD50_{dut}'].loc[mask[dut-1]]-df[f'timeCFD20_0'].loc[mask[dut-1]])
+                    time_array = np.array(df[f'timeCFD20_{dut}'].loc[mask[dut-1]]-df[f'timeCFD50_0'].loc[mask[dut-1]])
                     pulseheight_array = np.array(df[f'pulseHeight_{dut}'].loc[mask[dut-1]])
                 else:
-                    time_array = np.array(df[f'timeCFD50_{dut}']-df[f'timeCFD20_0'])
+                    time_array = np.array(df[f'timeCFD20_{dut}']-df[f'timeCFD50_0'])
                     pulseheight_array = np.array(df[f'pulseHeight_{dut}'])
 
                 ### I am starting to think that this part should not be here at all
