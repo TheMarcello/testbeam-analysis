@@ -213,7 +213,7 @@ def plot_histogram(data, bins='auto', poisson_err=False, error_band=False, fig_a
     return hist, bins_points, info, fig, ax
 
 
-def charge_fit(df, dut, mask, transimpedance, p0=None, plot=True):
+def charge_fit(df, dut, mask, transimpedance, p0=None, plot=True, savefig=False):
     """
     Function to find the best fit of the charge distribution to a Landau*Gaussian convolution
 
@@ -242,8 +242,10 @@ def charge_fit(df, dut, mask, transimpedance, p0=None, plot=True):
     param, covariance = curve_fit(pylandau.langau, bins_centers, hist, p0=p0)
     if plot:
         ax.plot(bins_centers, pylandau.langau(bins_centers, *param),
-                label=f"$MPV$: %.0f, $\eta$: %.0f, $\sigma$: %.0f, A: %.0f" %(param[0],param[1], param[2], param[3]))
+                label=f"$MPV$: %.1f, $\eta$: %.1f, $\sigma$: %.1f, A: %.0f" %(param[0],param[1], param[2], param[3]))
         ax.legend(fontsize=16)
+        if savefig:
+            fig.savefig(savefig)
     return param, covariance
 
 
@@ -582,17 +584,19 @@ def time_mask(df, DUT_number, bins=10000, mask=None, p0=None, sigmas=3, plot=Fal
         logging.error("in 'time_mask(): some error occurred while fitting, no time mask")
         return pd.Series(True, index=df.index), None
     logging.info(f"in 'time_mask()': Fit parameters {param}")
+    chi2_reduced = sum((hist-my_gauss(bins_centers,*param))**2/my_gauss(bins_centers,*param))/(len(hist)-len(param))
     left_base, right_base = param[1]-sigmas*np.abs(param[2]), param[1]+sigmas*np.abs(param[2])
     left_cut = (df[f"timeCFD20_{dut}"]-df[f"timeCFD50_0"])>left_base
     right_cut = (df[f"timeCFD20_{dut}"]-df[f"timeCFD50_0"])<right_base
     time_cut = np.logical_and(left_cut, right_cut)
     if plot:
-        ax.set_xlim(param[1]-100*np.abs(param[2]), param[1]+100*np.abs(param[2]))
+        ax.set_xlim(param[1]-50*np.abs(param[2]), param[1]+50*np.abs(param[2]))
         ax.plot(bins_centers, my_gauss(bins_centers,*param), color='k', label="A: %.0f, $\mu$: %.0f, $\sigma$: %.1f, BG: %.1f" %(param[0],param[1], param[2], param[3]))
+        ax.plot([],[], linewidth=0, label="$\chi^2$ reduced: "+f"%.1f"%chi2_reduced)
         ax.legend(fontsize=14)
         if savefig:
             fig.savefig(savefig)
-    return time_cut, {'parameters':param, 'covariance':covar, 'left_base':left_base, 'right_base':right_base} # info 
+    return time_cut, {'parameters':param, 'covariance':covar,'chi2_reduced':chi2_reduced, 'left_base':left_base, 'right_base':right_base} # info 
     
 
 
@@ -620,7 +624,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
     efficiency_lim: limit of the y axis for 1D efficiency plot
     extra_info:     boolean option to have extra information on the plot        ### now only for 'Time_pulseHeight' but could be more generally useful 
     info:           boolean option for standard information 
-    mask:           list of boolean arrays to plot the 2D tracks where 'mask' is True (i.e. df['Xtr'].loc[mask[DUT]])
+    mask:           list of boolean arrays to plot the 2D tracks where 'mask' is True (i.e. df['Xtr'].loc[mask[DUT]]), LIST SHOULD BE WITH SIZE=3
     geometry_cut:   options for specific cuts
                         'center':   central area of 0.5x0.5 mm^2
                         'extended': 20% extended area (to study interpad area)
