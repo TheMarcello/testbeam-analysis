@@ -503,13 +503,15 @@ def geometry_mask(df, DUT_number, bins, bins_find_min='rice', only_select="norma
                 my_filter = df[f"pulseHeight_{i+1}"]>min_value
             case 'time':
                 my_filter = time_mask(df, i, bins=5000, plot=False)[0]
+            case other:
+                logging.warning(f"wrong parameter: {other}, options: 'pulseheight' or 'time' ")
         Xtr_cut = df[f"Xtr_{i}"].loc[my_filter]       ### X tracks with applied pulseHeight
         Ytr_cut = df[f"Ytr_{i}"].loc[my_filter]
         left_edge, right_edge = find_edges(Xtr_cut, bins=bins[0], use_kde=True)
         bottom_edge, top_edge = find_edges(Ytr_cut, bins=bins[1], use_kde=True)
     except:
         logging.warning("in 'geometry_mask()', something wrong, no boolean mask")
-        return pd.Series(True, index=df.index)  ### return all True array if there is no minimum
+        return pd.Series(True, index=df.index), {}  ### return all True array if there is no minimum
     match only_select:
         case "center":
             central_edge = 0.5 / 2 # 0.5mm / 2
