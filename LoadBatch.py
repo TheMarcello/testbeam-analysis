@@ -465,7 +465,7 @@ def rectangle_from_geometry_cut(left_edge, right_edge, bottom_edge, top_edge, **
                      **default_arguments)
 
 
-def geometry_mask(df, DUT_number, bins, bins_find_min='rice', only_select="normal", use='pulseheight'):
+def geometry_mask(df, DUT_number, bins, bins_find_min='rice', only_select="normal", use='pulseheight', fraction=0.2):
     """
     Creates a boolean mask for selecting the 2D shape of the dut (sensor) by applying a pulseHeight cut.
     If the minimum of the pulseHeight could not be found it returns all True
@@ -524,8 +524,8 @@ def geometry_mask(df, DUT_number, bins, bins_find_min='rice', only_select="norma
             ygeometry = np.logical_and(df[f"Ytr_{i}"]>bottom_edge, df[f"Ytr_{i}"]<top_edge)
             bool_geometry = np.logical_and(xgeometry, ygeometry)
         case "extended":
-            left_edge, right_edge = extend_edges(left_edge, right_edge)
-            bottom_edge, top_edge = extend_edges(bottom_edge, top_edge)
+            left_edge, right_edge = extend_edges(left_edge, right_edge, fraction=fraction)
+            bottom_edge, top_edge = extend_edges(bottom_edge, top_edge, fraction=fraction)
             xgeometry = np.logical_and(df[f"Xtr_{i}"]>left_edge, df[f"Xtr_{i}"]<right_edge)
             ygeometry = np.logical_and(df[f"Ytr_{i}"]>bottom_edge, df[f"Ytr_{i}"]<top_edge)
             bool_geometry = np.logical_and(xgeometry, ygeometry)
