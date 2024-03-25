@@ -195,7 +195,7 @@ class Batch:
                 if 'CERN' in sensor.board and 'CERN-4' not in sensor.board: ### boards CERN-1,CERN-2,CERN-3
                     sensor.transimpedance = four_ch_transimpedance
                 elif sensor.board == NO_BOARD:                              ### no board name
-                    logging.error("set_transimpedance(): No board name assigned")
+                    logging.info("in set_transimpedance(): No board name assigned: no transimpedance set")
                 elif sensor.board is not None and sensor.board != NO_BOARD: ### all the other options
                     sensor.transimpedance = single_ch_transimpedance
                 else:                                                       ### probably board name is None

@@ -485,6 +485,7 @@ def geometry_mask(df, DUT_number, bins, bins_find_min='rice', only_select="norma
     use:            option to use pulseheight or time to determine the geometry cut
                         'pulseheight'
                         'time'
+    fraction:       fraction of sensor width to extend the 'extended' selection
 
     Returns
     -------
