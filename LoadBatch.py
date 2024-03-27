@@ -27,7 +27,19 @@ from SensorClasses import *
 PIXEL_SIZE = 0.0185 #mm
 
 
+def get_DUTs_from_dictionary(dictionary, oscilloscope):
+    """
+    Small function to add the dut only if there is a 'board' and voltage>0
+    dictionary contains all the sensor.__dict__
+    """
+    DUTs = []
+    for i,ch in enumerate(('Ch2','Ch3','Ch4')):
+        if (dictionary[(oscilloscope,ch)]['board'] != 'no_board') and (dictionary[(oscilloscope,ch)]['voltage'] != 0):
+            DUTs.append(i+1)
+    return DUTs
+
 def my_gauss(x, A, mu, sigma, background):
+
     """Custom normal distribution function + uniform background"""
     return A * np.exp(-0.5*(x-mu)**2/sigma**2) + background
 
@@ -65,7 +77,7 @@ def load_batch(batch_number, oscilloscope, branches=None,
     df:                 pandas.Dataframe with all the required data
     """
     if branches is None:
-        branches = ["eventNumber", "Xtr", "Ytr", "pulseHeight", "charge", "timeCFD20", "timeCFD50", "timeCFD70"]
+        branches = ["eventNumber", "Xtr", "Ytr", "pulseHeight", "charge", "noise", "timeCFD20", "timeCFD50", "timeCFD70"]
     columns_to_remove = ["Xtr_4","Xtr_5","Xtr_6","Xtr_7","Ytr_4","Ytr_5","Ytr_6","Ytr_7"]
     logging.info(f"Loading batch {batch_number} \t Oscilloscope {oscilloscope}")    
     dir_path = os.path.join(data_path,oscilloscope)
@@ -621,6 +633,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                         'Time_pulseHeight'
                         '1D_Efficiency':    projection of the efficiency on X and Y axis respectively
                         '2D_Efficiency':    2D plot of the efficiency 
+                        'CFD_comparison':   grid plots with delta t histogram with different CFD values
     batch_object:   batch object (see class Batch in SensorClasses.py)
     this_scope:     oscilloscope name (either 'S1' or 'S2')
     bins:           binning options, (int,int) or (bin_edges_list, bin_edges_list), different default for each plot_type
@@ -629,7 +642,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
     efficiency_lim: limit of the y axis for 1D efficiency plot
     extra_info:     boolean option to have extra information on the plot        ### now only for 'Time_pulseHeight' but could be more generally useful 
     info:           boolean option for standard information 
-    mask:           list of boolean arrays to plot the 2D tracks where 'mask' is True (i.e. df['Xtr'].loc[mask[DUT]]), LIST SHOULD BE WITH SIZE=3
+    mask:           list of boolean arrays to plot the 2D tracks where 'mask' is True (i.e. df['Xtr'].loc[mask[DUT-1]]), LIST SHOULD BE WITH SIZE=3
     geometry_cut:   options for specific cuts
                         'center':   central area of 0.5x0.5 mm^2
                         'extended': 20% extended area (to study interpad area)
@@ -903,90 +916,85 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
  
 
         case "CFD_comparison":
-            if fig_ax:  fig, axes = fig_ax
-            else:       fig, axes = plt.subplots(nrows=1, ncols=len(n_DUT), figsize=(6*len(n_DUT),6), sharex=False, sharey=False, dpi=200)
+            # if fig_ax:  fig, axes = fig_ax
+            # else:       fig, axes = plt.subplots(nrows=1, ncols=len(n_DUT), figsize=(6*len(n_DUT),6), sharex=False, sharey=False, dpi=200)
             if bins is None: bins = (200,200)       ### default binning
 
             colormap = ['k','b','g','r']
             if CFD_values is None: CFD_values = (20,50,70)
             axes_size = len(CFD_values)
-            if n_DUT is None: n_DUT = (1,2,3)
+            # if n_DUT is None: n_DUT = (1,2,3)  ### maybe it's just better to do it one dut at a time
             window_limit = 20e3
             xlim = (-7e3,-4.5e3)
             MCP_resolution = 36.52
             time_bins = 5000
-            geo_cuts = [geometry_mask(df, DUT_number=dut, bins=bins, bins_find_min='rice', use=use)[0] if dut in n_DUT else None for dut in [1,2,3]]
-            # time_cut = [time_mask(df, dut, bins=time_bins, mask=geo_cuts[dut-1], plot=False)[0] if dut in n_DUT else None for dut in [1,2,3]]
-            if use == 'time':
-                pulseheight_cut = [df[f'pulseHeight_{dut}']!=None if dut in n_DUT else None for dut in [1,2,3]]    ### trying to make it all TRUE 
-            else:
-                mins = [find_min_btw_peaks(df[f"pulseHeight_{dut}"], bins='rice', plot=False) if dut in n_DUT else None for dut in [1,2,3]]
-                pulseheight_cut = [df[f'pulseHeight_{dut}']>mins[dut-1] if dut in n_DUT else None for dut in [1,2,3]]
+
+            dut = n_DUT
+            fig, axes = plt.subplots(figsize=(6*axes_size,4*axes_size), nrows=axes_size, ncols=axes_size, dpi=300)
             
-            charge_cut = [df[f'charge_{dut}']>threshold_charge if dut in n_DUT else None for dut in [1,2,3]]
-            
-            for dut in n_DUT:
-                fig, axes = plt.subplots(figsize=(6*axes_size,4*axes_size), nrows=axes_size, ncols=axes_size, dpi=300)
+            ### I NEED TO RETURN THIS VALUES
+            time_resolution_table = []
+            chi2_table = []
+
+            for i, ax in enumerate(axes.flatten()):
+                CFD_MCP = CFD_values[i//axes_size]
+                CFD_DUT = CFD_values[i%axes_size]
+
+                if mask is not None:    dut_cut = mask[dut-1]
+                else:                   dut_cut = pd.Series(True, index=df.index)
+
+                window_fit = np.logical_and((df[f"timeCFD{CFD_DUT}_{dut}"]-df[f"timeCFD{CFD_MCP}_0"])> -window_limit,
+                                        (df[f"timeCFD{CFD_DUT}_{dut}"]-df[f"timeCFD{CFD_MCP}_0"])< +window_limit)
+                dut_cut = np.logical_and(window_fit, dut_cut)
+
+                # dut_cut = np.logical_and(window_fit, np.logical_and(pulse_cuts[dut-1],geo_cuts[dut-1]))
+                ### ONLY EVENTS WITH CHARGE OVER THE THRESHOLD CHARGE
                 
-                ### I NEED TO RETURN THIS VALUES
-                time_resolution_table = []
-                chi2_table = []
+                ### maybe this should be the 'mask'
+                # dut_cut = np.logical_and(charge_cut[dut-1],
+                #                         np.logical_and(window_fit, np.logical_and(pulseheight_cut[dut-1],geo_cuts[dut-1])))
 
-                for i, ax in enumerate(axes.flatten()):
-                    CFD_MCP = CFD_values[i//axes_size]
-                    CFD_DUT = CFD_values[i%axes_size]
+                hist, my_bins,_,_,_ = plot_histogram((df[f"timeCFD{CFD_DUT}_{dut}"].loc[dut_cut]-df[f"timeCFD{CFD_MCP}_0"].loc[dut_cut]),
+                                                    bins=time_bins, color='k', linewidth=1, alpha=1,
+                                                    fig_ax=(fig,ax))
 
-                    window_fit = np.logical_and((df[f"timeCFD{CFD_DUT}_{dut}"]-df[f"timeCFD{CFD_MCP}_0"])> -window_limit,
-                                            (df[f"timeCFD{CFD_DUT}_{dut}"]-df[f"timeCFD{CFD_MCP}_0"])< +window_limit)
-                    # dut_cut = np.logical_and(window_fit, all_cuts[dut-1])
-                    # dut_cut = np.logical_and(window_fit, np.logical_and(pulse_cuts[dut-1],geo_cuts[dut-1]))
-                    ### ONLY EVENTS WITH CHARGE OVER THE THRESHOLD CHARGE
-                    
-                    ### maybe this should be the 'mask'
-                    dut_cut = np.logical_and(charge_cut[dut-1],
-                                            np.logical_and(window_fit, np.logical_and(pulseheight_cut[dut-1],geo_cuts[dut-1])))
+                bins_centers = (my_bins[:-1]+my_bins[1:])/2
+                initial_param = (np.max(hist),bins_centers[np.argmax(hist)],100,np.average(hist))
+                param, covar = curve_fit(my_gauss, bins_centers, hist, p0=initial_param)#, sigma=hist**0.5, absolute_sigma=True)
+                #     print(f"Fit parameters: {param}"
+                ax.plot(bins_centers, my_gauss(bins_centers,*param), color=colormap[dut])
 
-                    hist, my_bins,_,_,_ = plot_histogram((df[f"timeCFD{CFD_DUT}_{dut}"].loc[dut_cut]-df[f"timeCFD{CFD_MCP}_0"].loc[dut_cut]),
-                                                        bins=time_bins, color='k', linewidth=1, alpha=1,
-                                                        fig_ax=(fig,ax))
+                ### add units to the parameters
+                ax.plot([],[],linewidth=0, label="A: %.0f" %param[0]) # only two decimals
+                ax.plot([],[],linewidth=0, label="$\mu$: %.1f $\pm$ %.1f"%(param[1],covar[1,1]**0.5))
+                ax.plot([],[],linewidth=0, label="$\sigma$: %.2f $\pm$ %.2f"%(param[2],covar[2,2]**0.5))
+                ax.plot([],[],linewidth=0, label="BG: %.1f $\pm$ %.1f"%(param[3],covar[3,3]**0.5))
+                chi2_reduced = sum((hist-my_gauss(bins_centers,*param))**2/my_gauss(bins_centers,*param))/(len(hist)-len(param))
+                ax.plot([],[],linewidth=0, label="$\chi^2$ reduced: "+f"%.1f"%chi2_reduced)
+                ### skewness doesn't work, idk why
+            #     skewness = skew((df[f"timeCFD{CFD_DUT}_{dut}"].loc[dut_cut]-df[f"timeCFD{CFD_MCP}_0"].loc[dut_cut]))
+            #     ax.plot([],[],linewidth=0, label="skewness: %.1f" %skewness[1])
 
-                    bins_centers = (my_bins[:-1]+my_bins[1:])/2
-                    initial_param = (np.max(hist),bins_centers[np.argmax(hist)],100,np.average(hist))
-                    param, covar = curve_fit(my_gauss, bins_centers, hist, p0=initial_param)#, sigma=hist**0.5, absolute_sigma=True)
-                    #     print(f"Fit parameters: {param}"
-                    ax.plot(bins_centers, my_gauss(bins_centers,*param), color=colormap[dut])
+            #     ax.plot([],[],linewidth=0, label=f"(MCP: CFD{CFD_MCP}%, DUT: CFD{CFD_DUT}%)")
+                plot_title = f"MCP: CFD{CFD_MCP}%, DUT: CFD{CFD_DUT}%"
+                ax.set_title(plot_title, fontsize=16)
+                ax.set_xlabel(f"$\Delta t$ [ps]", fontsize=16)
+                ax.set_ylabel("Events", fontsize=16)
+                time_resolution_table.append(np.sqrt(param[2]**2-MCP_resolution**2))
+                chi2_table.append(chi2_reduced)
 
-                    ### add units to the parameters
-                    ax.plot([],[],linewidth=0, label="A: %.0f" %param[0]) # only two decimals
-                    ax.plot([],[],linewidth=0, label="$\mu$: %.1f $\pm$ %.1f"%(param[1],covar[1,1]**0.5))
-                    ax.plot([],[],linewidth=0, label="$\sigma$: %.2f $\pm$ %.2f"%(param[2],covar[2,2]**0.5))
-                    ax.plot([],[],linewidth=0, label="BG: %.1f $\pm$ %.1f"%(param[3],covar[3,3]**0.5))
-                    chi2_reduced = sum((hist-my_gauss(bins_centers,*param))**2/my_gauss(bins_centers,*param))/(len(hist)-len(param))
-                    ax.plot([],[],linewidth=0, label="$\chi^2$ reduced: "+f"%.1f"%chi2_reduced)
-                    ### skewness doesn't work, idk why
-                #     skewness = skew((df[f"timeCFD{CFD_DUT}_{dut}"].loc[dut_cut]-df[f"timeCFD{CFD_MCP}_0"].loc[dut_cut]))
-                #     ax.plot([],[],linewidth=0, label="skewness: %.1f" %skewness[1])
+        #             xlim = (-7e3,-5e3)
+                ax.set_xlim(xlim)
+                ax.legend(fontsize=16, framealpha=0, markerscale=0)
 
-                #     ax.plot([],[],linewidth=0, label=f"(MCP: CFD{CFD_MCP}%, DUT: CFD{CFD_DUT}%)")
-                    plot_title = f"MCP: CFD{CFD_MCP}%, DUT: CFD{CFD_DUT}%"
-                    ax.set_title(plot_title, fontsize=16)
-                    ax.set_xlabel(f"$\Delta t$ [ps]", fontsize=16)
-                    ax.set_ylabel("Events", fontsize=16)
-                    time_resolution_table.append(np.sqrt(param[2]**2-MCP_resolution**2))
-                    chi2_table.append(chi2_reduced)
+            fig.tight_layout(w_pad=4, h_pad=4)
+            savefig_details += f'dut: {dut}'
+            title_position = 1.1
 
-            #             xlim = (-7e3,-5e3)
-                    ax.set_xlim(xlim)
-                    ax.legend(fontsize=16, framealpha=0, markerscale=0)
-
-                fig.tight_layout(w_pad=4, h_pad=4)
-                savefig_details += f'dut: {dut}'
-                title_position
-
-                ### I should have each 'case' provide its own final figure title name
-                # sensor_name = batch_object.get_sensor(f'Ch{dut+1}').name
-                # fig.suptitle(f"Time resolution fit, after applying cuts \
-                # \n Batch: {batch_object.batch_number}, Oscilloscope: {this_scope}, Ch{dut+1}: {sensor_name}",y=1.1 , fontsize=20)
+            ### I should have each 'case' provide its own final figure title name
+            # sensor_name = batch_object.get_sensor(f'Ch{dut+1}').name
+            # fig.suptitle(f"Time resolution fit, after applying cuts \
+            # \n Batch: {batch_object.batch_number}, Oscilloscope: {this_scope}, Ch{dut+1}: {sensor_name}",y=1.1 , fontsize=20)
 
 
         case other:
