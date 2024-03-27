@@ -465,7 +465,7 @@ def rectangle_from_geometry_cut(left_edge, right_edge, bottom_edge, top_edge, **
                      **default_arguments)
 
 
-def geometry_mask(df, DUT_number, bins, bins_find_min='rice', only_select="normal", use='pulseheight', fraction=0.2):
+def geometry_mask(df, DUT_number, bins, bins_find_min='rice', only_select="normal", plot=False, use='pulseheight', time_bins=5000, fraction=0.2):
     """
     Creates a boolean mask for selecting the 2D shape of the dut (sensor) by applying a pulseHeight cut.
     If the minimum of the pulseHeight could not be found it returns all True
@@ -482,9 +482,11 @@ def geometry_mask(df, DUT_number, bins, bins_find_min='rice', only_select="norma
                         'normal':   full dut area 
                         'X':        only filters on one axis (X)
                         'Y':         "      "      "     "   (Y)
+    plot:           plot the fit of the 'find_min_btw_peaks()' or the 'time_mask()'
     use:            option to use pulseheight or time to determine the geometry cut
                         'pulseheight'
                         'time'
+    time_bins:      binning for the time (only used in case: use='time')
     fraction:       fraction of sensor width to extend the 'extended' selection
 
     Returns
@@ -496,18 +498,18 @@ def geometry_mask(df, DUT_number, bins, bins_find_min='rice', only_select="norma
                         'bottom_edge'
                         'top_edge'
     """
-    i = DUT_number-1 ### index of the DUT
+    dut = DUT_number ### index of the DUT
     try:
         match use:
             case 'pulseheight':
-                min_value = find_min_btw_peaks(df[f"pulseHeight_{i+1}"], bins=bins_find_min, plot=False)#True
-                my_filter = df[f"pulseHeight_{i+1}"]>min_value
+                min_value = find_min_btw_peaks(df[f"pulseHeight_{dut}"], bins=bins_find_min, plot=plot)#True
+                my_filter = df[f"pulseHeight_{dut}"]>min_value
             case 'time':
-                my_filter = time_mask(df, i, bins=5000, plot=False)[0]
+                my_filter = time_mask(df, dut, bins=time_bins, plot=plot)[0]
             case other:
                 logging.warning(f"wrong parameter: {other}, options: 'pulseheight' or 'time' ")
-        Xtr_cut = df[f"Xtr_{i}"].loc[my_filter]       ### X tracks with applied pulseHeight
-        Ytr_cut = df[f"Ytr_{i}"].loc[my_filter]
+        Xtr_cut = df[f"Xtr_{dut-1}"].loc[my_filter]       ### X tracks with applied pulseHeight
+        Ytr_cut = df[f"Ytr_{dut-1}"].loc[my_filter]
         left_edge, right_edge = find_edges(Xtr_cut, bins=bins[0], use_kde=True)
         bottom_edge, top_edge = find_edges(Ytr_cut, bins=bins[1], use_kde=True)
     except:
@@ -521,23 +523,23 @@ def geometry_mask(df, DUT_number, bins, bins_find_min='rice', only_select="norma
             right_edge =    np.ceil(center[0] + central_edge/PIXEL_SIZE)
             bottom_edge =   np.floor(center[1] - central_edge/PIXEL_SIZE)
             top_edge =      np.ceil(center[1] + central_edge/PIXEL_SIZE)
-            xgeometry = np.logical_and(df[f"Xtr_{i}"]>left_edge, df[f"Xtr_{i}"]<right_edge)
-            ygeometry = np.logical_and(df[f"Ytr_{i}"]>bottom_edge, df[f"Ytr_{i}"]<top_edge)
+            xgeometry = np.logical_and(df[f"Xtr_{dut-1}"]>left_edge, df[f"Xtr_{dut-1}"]<right_edge)
+            ygeometry = np.logical_and(df[f"Ytr_{dut-1}"]>bottom_edge, df[f"Ytr_{dut-1}"]<top_edge)
             bool_geometry = np.logical_and(xgeometry, ygeometry)
         case "extended":
             left_edge, right_edge = extend_edges(left_edge, right_edge, fraction=fraction)
             bottom_edge, top_edge = extend_edges(bottom_edge, top_edge, fraction=fraction)
-            xgeometry = np.logical_and(df[f"Xtr_{i}"]>left_edge, df[f"Xtr_{i}"]<right_edge)
-            ygeometry = np.logical_and(df[f"Ytr_{i}"]>bottom_edge, df[f"Ytr_{i}"]<top_edge)
+            xgeometry = np.logical_and(df[f"Xtr_{dut-1}"]>left_edge, df[f"Xtr_{dut-1}"]<right_edge)
+            ygeometry = np.logical_and(df[f"Ytr_{dut-1}"]>bottom_edge, df[f"Ytr_{dut-1}"]<top_edge)
             bool_geometry = np.logical_and(xgeometry, ygeometry)
         case "normal":
-            xgeometry = np.logical_and(df[f"Xtr_{i}"]>left_edge, df[f"Xtr_{i}"]<right_edge)
-            ygeometry = np.logical_and(df[f"Ytr_{i}"]>bottom_edge, df[f"Ytr_{i}"]<top_edge)
+            xgeometry = np.logical_and(df[f"Xtr_{dut-1}"]>left_edge, df[f"Xtr_{dut-1}"]<right_edge)
+            ygeometry = np.logical_and(df[f"Ytr_{dut-1}"]>bottom_edge, df[f"Ytr_{dut-1}"]<top_edge)
             bool_geometry = np.logical_and(xgeometry, ygeometry)
         case "X":
-            bool_geometry = np.logical_and(df[f"Ytr_{i}"]>bottom_edge, df[f"Ytr_{i}"]<top_edge)
+            bool_geometry = np.logical_and(df[f"Ytr_{dut-1}"]>bottom_edge, df[f"Ytr_{dut-1}"]<top_edge)
         case "Y":
-            bool_geometry = np.logical_and(df[f"Xtr_{i}"]>left_edge, df[f"Xtr_{i}"]<right_edge)
+            bool_geometry = np.logical_and(df[f"Xtr_{dut-1}"]>left_edge, df[f"Xtr_{dut-1}"]<right_edge)
         case other:
             logging.warning(f"{other} is not an option, options are 'center', 'X', 'Y', 'normal'")
             return
@@ -602,8 +604,8 @@ def time_mask(df, DUT_number, bins=10000, mask=None, p0=None, sigmas=3, plot=Fal
     return time_cut, {'parameters':param, 'covariance':covar,'chi2_reduced':chi2_reduced, 'left_base':left_base, 'right_base':right_base} # info 
     
 
-
-def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice', n_DUT=None, efficiency_lim=None, extra_info=True, info=True, geometry_cut="normal", mask=None, threshold_charge=4, transimpedance=None, use='pulseheight', zoom_to_sensor=False,
+### I want to add time_bins (now 5000)
+def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice', n_DUT=None, CFD_values=None, efficiency_lim=None, extra_info=True, info=True, geometry_cut="normal", mask=None, threshold_charge=4, transimpedance=None, use='pulseheight', zoom_to_sensor=False,
         fig_ax=None, savefig=False, savefig_path='../various plots', savefig_details='', fmt='svg',
         **kwrd_arg):
     """
@@ -646,10 +648,10 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
     fmt:            format of the file saved ('.jpg', '.svg', '.png' etc.)
     Returns
     -------
-    fig, axes:        figure and axis objects so that more manipulation can be done
+    fig, axes:      figure and axis objects so that more manipulation can be done
     """
     if n_DUT is None:
-        n_DUT = [1,2,3]
+        n_DUT = (1,2,3)
     match plot_type:
         case "1D_Tracks":        ### 1D tracks plots
             if fig_ax:  fig, axes = fig_ax
@@ -894,11 +896,105 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             cb.set_label(label="Efficiency (%)", fontsize=16)
             # savefig_details += f'(geometry cut using {use})'
 
+
+# (df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice', n_DUT=None, efficiency_lim=None, extra_info=True, info=True, geometry_cut="normal", mask=None, threshold_charge=4, transimpedance=None, use='pulseheight', zoom_to_sensor=False,
+#         fig_ax=None, savefig=False, savefig_path='../various plots', savefig_details='', fmt='svg',
+#         **kwrd_arg):
+ 
+
+        case "CFD_comparison":
+            if fig_ax:  fig, axes = fig_ax
+            else:       fig, axes = plt.subplots(nrows=1, ncols=len(n_DUT), figsize=(6*len(n_DUT),6), sharex=False, sharey=False, dpi=200)
+            if bins is None: bins = (200,200)       ### default binning
+
+            colormap = ['k','b','g','r']
+            if CFD_values is None: CFD_values = (20,50,70)
+            axes_size = len(CFD_values)
+            if n_DUT is None: n_DUT = (1,2,3)
+            window_limit = 20e3
+            xlim = (-7e3,-4.5e3)
+            MCP_resolution = 36.52
+            time_bins = 5000
+            geo_cuts = [geometry_mask(df, DUT_number=dut, bins=bins, bins_find_min='rice', use=use)[0] if dut in n_DUT else None for dut in [1,2,3]]
+            # time_cut = [time_mask(df, dut, bins=time_bins, mask=geo_cuts[dut-1], plot=False)[0] if dut in n_DUT else None for dut in [1,2,3]]
+            if use == 'time':
+                pulseheight_cut = [df[f'pulseHeight_{dut}']!=None if dut in n_DUT else None for dut in [1,2,3]]    ### trying to make it all TRUE 
+            else:
+                mins = [find_min_btw_peaks(df[f"pulseHeight_{dut}"], bins='rice', plot=False) if dut in n_DUT else None for dut in [1,2,3]]
+                pulseheight_cut = [df[f'pulseHeight_{dut}']>mins[dut-1] if dut in n_DUT else None for dut in [1,2,3]]
+            
+            charge_cut = [df[f'charge_{dut}']>threshold_charge if dut in n_DUT else None for dut in [1,2,3]]
+            
+            for dut in n_DUT:
+                fig, axes = plt.subplots(figsize=(6*axes_size,4*axes_size), nrows=axes_size, ncols=axes_size, dpi=300)
+                
+                ### I NEED TO RETURN THIS VALUES
+                time_resolution_table = []
+                chi2_table = []
+
+                for i, ax in enumerate(axes.flatten()):
+                    CFD_MCP = CFD_values[i//axes_size]
+                    CFD_DUT = CFD_values[i%axes_size]
+
+                    window_fit = np.logical_and((df[f"timeCFD{CFD_DUT}_{dut}"]-df[f"timeCFD{CFD_MCP}_0"])> -window_limit,
+                                            (df[f"timeCFD{CFD_DUT}_{dut}"]-df[f"timeCFD{CFD_MCP}_0"])< +window_limit)
+                    # dut_cut = np.logical_and(window_fit, all_cuts[dut-1])
+                    # dut_cut = np.logical_and(window_fit, np.logical_and(pulse_cuts[dut-1],geo_cuts[dut-1]))
+                    ### ONLY EVENTS WITH CHARGE OVER THE THRESHOLD CHARGE
+                    
+                    ### maybe this should be the 'mask'
+                    dut_cut = np.logical_and(charge_cut[dut-1],
+                                            np.logical_and(window_fit, np.logical_and(pulseheight_cut[dut-1],geo_cuts[dut-1])))
+
+                    hist, my_bins,_,_,_ = plot_histogram((df[f"timeCFD{CFD_DUT}_{dut}"].loc[dut_cut]-df[f"timeCFD{CFD_MCP}_0"].loc[dut_cut]),
+                                                        bins=time_bins, color='k', linewidth=1, alpha=1,
+                                                        fig_ax=(fig,ax))
+
+                    bins_centers = (my_bins[:-1]+my_bins[1:])/2
+                    initial_param = (np.max(hist),bins_centers[np.argmax(hist)],100,np.average(hist))
+                    param, covar = curve_fit(my_gauss, bins_centers, hist, p0=initial_param)#, sigma=hist**0.5, absolute_sigma=True)
+                    #     print(f"Fit parameters: {param}"
+                    ax.plot(bins_centers, my_gauss(bins_centers,*param), color=colormap[dut])
+
+                    ### add units to the parameters
+                    ax.plot([],[],linewidth=0, label="A: %.0f" %param[0]) # only two decimals
+                    ax.plot([],[],linewidth=0, label="$\mu$: %.1f $\pm$ %.1f"%(param[1],covar[1,1]**0.5))
+                    ax.plot([],[],linewidth=0, label="$\sigma$: %.2f $\pm$ %.2f"%(param[2],covar[2,2]**0.5))
+                    ax.plot([],[],linewidth=0, label="BG: %.1f $\pm$ %.1f"%(param[3],covar[3,3]**0.5))
+                    chi2_reduced = sum((hist-my_gauss(bins_centers,*param))**2/my_gauss(bins_centers,*param))/(len(hist)-len(param))
+                    ax.plot([],[],linewidth=0, label="$\chi^2$ reduced: "+f"%.1f"%chi2_reduced)
+                    ### skewness doesn't work, idk why
+                #     skewness = skew((df[f"timeCFD{CFD_DUT}_{dut}"].loc[dut_cut]-df[f"timeCFD{CFD_MCP}_0"].loc[dut_cut]))
+                #     ax.plot([],[],linewidth=0, label="skewness: %.1f" %skewness[1])
+
+                #     ax.plot([],[],linewidth=0, label=f"(MCP: CFD{CFD_MCP}%, DUT: CFD{CFD_DUT}%)")
+                    plot_title = f"MCP: CFD{CFD_MCP}%, DUT: CFD{CFD_DUT}%"
+                    ax.set_title(plot_title, fontsize=16)
+                    ax.set_xlabel(f"$\Delta t$ [ps]", fontsize=16)
+                    ax.set_ylabel("Events", fontsize=16)
+                    time_resolution_table.append(np.sqrt(param[2]**2-MCP_resolution**2))
+                    chi2_table.append(chi2_reduced)
+
+            #             xlim = (-7e3,-5e3)
+                    ax.set_xlim(xlim)
+                    ax.legend(fontsize=16, framealpha=0, markerscale=0)
+
+                fig.tight_layout(w_pad=4, h_pad=4)
+                savefig_details += f'dut: {dut}'
+                title_position
+
+                ### I should have each 'case' provide its own final figure title name
+                # sensor_name = batch_object.get_sensor(f'Ch{dut+1}').name
+                # fig.suptitle(f"Time resolution fit, after applying cuts \
+                # \n Batch: {batch_object.batch_number}, Oscilloscope: {this_scope}, Ch{dut+1}: {sensor_name}",y=1.1 , fontsize=20)
+
+
         case other:
             logging.error(f"""{other} not a plot option. Options are:
             '1D_Tracks', '2D_Tracks', 'pulseHeight', '2D_Sensors', '1D_Efficiency', '2D_Efficiency' """)
             return
     
+    ### why did I even put this here? maybe to avoid duplication, but it seems dumb now
     fig.suptitle(f"{plot_type}, batch: {batch_object.batch_number} {savefig_details}", fontsize=24, y=title_position)
     # plt.show()  ### this prevents additional things to show up
     if savefig: 
