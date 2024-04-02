@@ -549,9 +549,15 @@ def geometry_mask(df, DUT_number, bins, bins_find_min='rice', only_select="norma
             ygeometry = np.logical_and(df[f"Ytr_{dut-1}"]>bottom_edge, df[f"Ytr_{dut-1}"]<top_edge)
             bool_geometry = np.logical_and(xgeometry, ygeometry)
         case "X":
-            bool_geometry = np.logical_and(df[f"Ytr_{dut-1}"]>bottom_edge, df[f"Ytr_{dut-1}"]<top_edge)
+            left_edge, right_edge = extend_edges(left_edge, right_edge, fraction=fraction)
+            xgeometry = np.logical_and(df[f"Xtr_{dut-1}"]>left_edge, df[f"Xtr_{dut-1}"]<right_edge)
+            ygeometry = np.logical_and(df[f"Ytr_{dut-1}"]>bottom_edge, df[f"Ytr_{dut-1}"]<top_edge)
+            bool_geometry = np.logical_and(xgeometry, ygeometry)
         case "Y":
-            bool_geometry = np.logical_and(df[f"Xtr_{dut-1}"]>left_edge, df[f"Xtr_{dut-1}"]<right_edge)
+            bottom_edge, top_edge = extend_edges(bottom_edge, top_edge, fraction=fraction)
+            xgeometry = np.logical_and(df[f"Xtr_{dut-1}"]>left_edge, df[f"Xtr_{dut-1}"]<right_edge)
+            ygeometry = np.logical_and(df[f"Ytr_{dut-1}"]>bottom_edge, df[f"Ytr_{dut-1}"]<top_edge)
+            bool_geometry = np.logical_and(xgeometry, ygeometry)
         case other:
             logging.warning(f"{other} is not an option, options are 'center', 'X', 'Y', 'normal'")
             return
@@ -568,7 +574,7 @@ def time_mask(df, DUT_number, bins=10000, mask=None, p0=None, sigmas=3, plot=Fal
     df:         dataframe containing the 'timeCFD50_0' and 'timeCFD20_dut'
     DUT_number: number of the selected dut for the time_mask filter
     bins:       binning options for the time difference
-### [REMOVED]  CFD_MCP:    constant fraction discriminator for the MCP, possibles are: 20,50,70 (percentage)
+    [REMOVED]  CFD_MCP:    constant fraction discriminator for the MCP, possibles are: 20,50,70 (percentage)
     mask:       boolean array (only one array) to filter events where 'mask' is True (i.e. df['Xtr'].loc[mask[DUT]])
     p0:         initial parameters for the gaussian fit (A, mu, sigma, background)
     sigmas:     number of sigmas from the center to include in the time cut window
@@ -617,8 +623,9 @@ def time_mask(df, DUT_number, bins=10000, mask=None, p0=None, sigmas=3, plot=Fal
     
 
 ### I want to add time_bins (now 5000)
-def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice', n_DUT=None, CFD_values=None, efficiency_lim=None, extra_info=True, info=True, geometry_cut="normal", mask=None, threshold_charge=4, transimpedance=None, use='pulseheight', zoom_to_sensor=False,
-        fig_ax=None, savefig=False, savefig_path='../various plots', savefig_details='', fmt='svg',
+def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice', n_DUT=None, CFD_values=None, efficiency_lim=None, extra_info=True, info=True, 
+        geometry_cut="normal", mask=None, threshold_charge=4, transimpedance=None, use='pulseheight', zoom_to_sensor=False, 
+        fig_ax=None, savefig=False, savefig_path='../various plots', savefig_details='', fmt='svg', title_position=None,
         **kwrd_arg):
     """
     Function to produce the plots \n
@@ -659,6 +666,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
     savefig_path:   folder where to save the plot
     savefig_details: optional details for the file name (e.g. distinguish cuts)
     fmt:            format of the file saved ('.jpg', '.svg', '.png' etc.)
+    title_position: vertical displacement of the main title in the plot (each plot_type has its own defaults)
     Returns
     -------
     fig, axes:      figure and axis objects so that more manipulation can be done
@@ -681,7 +689,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 ax.semilogy()
                 ax.set_xlabel('pixels', fontsize=20)
                 ax.set_ylabel('Events (log)', fontsize=20)
-            title_position = 1.15
+            if title_position is None: title_position = 1.15
             
         case "2D_Tracks":        ### 2D tracks plots
             if fig_ax:  fig, axes = fig_ax
@@ -703,7 +711,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 secy = axes[i].secondary_yaxis('right', functions=(lambda x: x*PIXEL_SIZE, lambda y: y*PIXEL_SIZE))
                 secx.set_xlabel('mm', fontsize=20)
                 secy.set_ylabel('mm', fontsize=20)
-            title_position = 1.05
+            if title_position is None: title_position = 1.05
             fig.tight_layout(w_pad=6, h_pad=4)
             cb = fig.colorbar(im, ax=axes.ravel().tolist(), fraction=0.1/len(n_DUT), pad=0.1) ### these numbers need adjusting
             cb.set_label(label="Reconstructed tracks", fontsize=16)
@@ -723,7 +731,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             # axes.set_title(f"PulseHeight (no cut), batch {batch_object.batch_number}, bins {bins}", fontsize=24, y=1.05)
             axes.set_xlim(left=-10)
             axes.legend(fontsize=20)
-            title_position = 1.05
+            if title_position is None: title_position = 1.05
             
         case "2D_Sensors":        ### 2D tracks plots filtering noise out (also include pulseHeight plot)
             if fig_ax:  fig, axes = fig_ax
@@ -752,7 +760,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 secy = axes[1,i].secondary_yaxis('right', functions=(lambda x: x*PIXEL_SIZE, lambda y: y*PIXEL_SIZE))
                 secx.set_xlabel('mm', fontsize=20)
                 secy.set_ylabel('mm', fontsize=20)
-            title_position = 1.15
+            if title_position is None: title_position = 1.15
             cb = fig.colorbar(im, ax=axes[1], fraction=0.1/len(n_DUT), pad=0.1)   ### this colorbar only counts the last 'im', not good
             cb.set_label(label="Reconstructed tracks", fontsize=16)
 
@@ -810,7 +818,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 ax.sharey(axes[0])
             cb = fig.colorbar(im, ax=axes)
             cb.set_label(label="Events density", fontsize=14)
-            title_position = 1.05
+            if title_position is None: title_position = 1.05
 
 
         case "1D_Efficiency":
@@ -862,7 +870,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                     axes[coord_idx,i].axhline(efficiency_bar, label=f"Average efficiency: %.2f"%(efficiency_bar*100)+'%', color='r', alpha=0.4, linewidth=2)
                     axes[coord_idx,i].grid('--')
                     axes[coord_idx,i].legend(fontsize=14)
-            title_position = 1.1
+            if title_position is None: title_position = 1.1
             # savefig_details += f'(geometry cut using {use})'
     
 
@@ -904,9 +912,9 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 secy = axes[i].secondary_yaxis('right', functions=(lambda x: x*PIXEL_SIZE, lambda y: y*PIXEL_SIZE))
                 secx.set_xlabel('mm', fontsize=20)
                 secy.set_ylabel('mm', fontsize=20)
-            title_position = 1.2
             cb = fig.colorbar(im, ax=axes.ravel().tolist(), fraction=0.1/len(n_DUT), pad=0.2)
             cb.set_label(label="Efficiency (%)", fontsize=16)
+            if title_position is None: title_position = 1.2
             # savefig_details += f'(geometry cut using {use})'
 
 
@@ -949,7 +957,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
 
                 # dut_cut = np.logical_and(window_fit, np.logical_and(pulse_cuts[dut-1],geo_cuts[dut-1]))
                 ### ONLY EVENTS WITH CHARGE OVER THE THRESHOLD CHARGE
-                
+
                 ### maybe this should be the 'mask'
                 # dut_cut = np.logical_and(charge_cut[dut-1],
                 #                         np.logical_and(window_fit, np.logical_and(pulseheight_cut[dut-1],geo_cuts[dut-1])))
@@ -983,13 +991,12 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 time_resolution_table.append(np.sqrt(param[2]**2-MCP_resolution**2))
                 chi2_table.append(chi2_reduced)
 
-        #             xlim = (-7e3,-5e3)
                 ax.set_xlim(xlim)
                 ax.legend(fontsize=16, framealpha=0, markerscale=0)
 
             fig.tight_layout(w_pad=4, h_pad=4)
             savefig_details += f'dut: {dut}'
-            title_position = 1.1
+            if title_position is None: title_position = 1.1
 
             ### I should have each 'case' provide its own final figure title name
             # sensor_name = batch_object.get_sensor(f'Ch{dut+1}').name
