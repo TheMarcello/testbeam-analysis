@@ -287,8 +287,11 @@ def efficiency(data, threshold, percentage=True):
     """
     factor = 1
     if percentage: factor = 100
-    return (sum(data>threshold) / data.size) * factor
-
+    if data.size>0:
+        return (sum(data>threshold) / data.size) * factor
+    else:
+        logging.warning("In efficiency(), data is empty")
+        return 0
 
 def efficiency_error(data, threshold):
     """
