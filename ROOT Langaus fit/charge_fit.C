@@ -268,7 +268,7 @@ void charge_fit() {
    langaupro(fp,SNRPeak,SNRFWHM);
 
    printf("Fitting done\nPlotting results...\n");
-   TCanvas* c1 = new TCanvas("c","c",800,600);
+   TCanvas* canvas = new TCanvas("c","c",800,600);
 
    // Global style settings
    gStyle->SetOptStat(1111);
@@ -282,8 +282,8 @@ void charge_fit() {
 
    // legend->AddEntry((TObject*)0, "Some text", "");
    std::string save_name = file_name + "_Charge_fit_ROOT_log.svg";
-   c1->SetLogy();
-   c1->SaveAs(save_name.data());
+   canvas->SetLogy();
+   canvas->SaveAs(save_name.data());
 
    return ;
 }
