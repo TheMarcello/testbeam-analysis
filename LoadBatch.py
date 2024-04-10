@@ -225,7 +225,7 @@ def plot_histogram(data, bins='auto', poisson_err=False, error_band=False, fig_a
     return hist, bins_points, info, fig, ax
 
 
-def charge_fit(df, dut, mask, transimpedance, p0=None, plot=True, savefig=False):
+def charge_fit(df, dut, mask, transimpedance, bins=500, p0=None, plot=True, savefig=False):
     """
     Function to find the best fit of the charge distribution to a Landau*Gaussian convolution
 
@@ -243,14 +243,14 @@ def charge_fit(df, dut, mask, transimpedance, p0=None, plot=True, savefig=False)
     param:      fit parameters (mpv, eta, sigma, A)
     covariance: covariance matrix of the fit parameters
     """
-    if plot:    hist,my_bins,_,fig,ax = plot_histogram(df[f'charge_{dut}'].loc[mask]/transimpedance, bins='auto',
+    if plot:    hist,my_bins,_,fig,ax = plot_histogram(df[f'charge_{dut}'].loc[mask]/transimpedance, bins=bins,
                                           label=f"CHARGE: Ch{dut+1}")
-    else:       hist,my_bins = np.histogram(df[f'charge_{dut}'].loc[mask]/transimpedance, bins='auto')
+    else:       hist,my_bins = np.histogram(df[f'charge_{dut}'].loc[mask]/transimpedance, bins=bins)
     bins_centers = (my_bins[1:]+my_bins[:-1])/2
     bins_centers = bins_centers.astype(np.float64)
     charge = bins_centers[np.argmax(hist)]
     logging.info(f'First charge estimate: {charge}')
-    if p0 is None: p0 = (charge,1,1,np.max(hist))
+    if p0 is None: p0 = (np.abs(charge),1,1,np.max(hist))
     param, covariance = curve_fit(pylandau.langau, bins_centers, hist, p0=p0)
     if plot:
         ax.plot(bins_centers, pylandau.langau(bins_centers, *param),
