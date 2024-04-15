@@ -1,3 +1,8 @@
+//    MIGHT CHANGE LATER
+//    from terminal:
+//    root -b -q "charge_fit.C(100,\"S1\",1)"
+//    ROOT macro
+//    .x charge_fit.C("charge_data_all_cuts_401_S1_3.csv")
 
 #include "TH1.h"
 #include "TF1.h"
@@ -216,11 +221,17 @@ int langaupro(double *params, double &maxx, double &FWHM) {
 }
 
 
-void charge_fit() {
+void charge_fit(int batch, const char* oscilloscope, int dut) {
    // Open file with charge (already with cuts)
-   std::string file_dir = "/home/marcello/Desktop/Radboud_not_synchro/Master_Thesis/testbeam-analysis/ROOT Langaus fit/";
-   std::string file_name = "charge_data_all_cuts_401_S1_3.csv";
-   std::ifstream inputFile(file_dir+file_name);
+   std::string this_batch = std::to_string(batch);
+   std::string this_scope = oscilloscope;
+   std::string this_dut = std::to_string(dut);
+
+   // std::string file_dir = "/home/marcello/Desktop/Radboud_not_synchro/Master_Thesis/testbeam-analysis/ROOT Langaus fit/";
+   std::string file_dir = "/home/marcello/Desktop/Radboud_not_synchro/Master_Thesis/various plots/all batches/" + this_batch + "/";
+   // std::string file_name = "charge_data_all_cuts_401_S1_3.csv";
+   std::string file_name = "charge_data_all_cuts_" + this_batch + "_" + this_scope + "_" + this_dut;// + ".csv";
+   std::ifstream inputFile(file_dir+file_name+".csv");
    
    // Check if the file is opened successfully
    if (!inputFile.is_open()) {
@@ -240,7 +251,7 @@ void charge_fit() {
 
    for (int i=0; i<size; i++) ones.push_back(1);
 
-   int n_bins = 500;
+   int n_bins = 300;
    TH1F *hSNR = new TH1F("charge fit","Charge with Langau fit",n_bins,-5,100);
 
    hSNR->FillN(size,charge.data(),ones.data());
@@ -251,10 +262,10 @@ void charge_fit() {
    // Setting fit range and start values
    double fr[2];
    double sv[4], pllo[4], plhi[4], fp[4], fpe[4];
-   fr[0] = 4;
-   fr[1] = 100;
-   // fr[0] = 0.35*hSNR->GetMean();
-   // fr[1] = 3.0*hSNR->GetMean();
+   // fr[0] = 4;
+   // fr[1] = 100;
+   fr[0] = 0.35*hSNR->GetMean();
+   fr[1] = 3.0*hSNR->GetMean();
 
    pllo[0]=0.5; pllo[1]=2.0; pllo[2]=1.0; pllo[3]=0.4;
    plhi[0]=5.0; plhi[1]=50.0; plhi[2]=1000000.0; plhi[3]=5.0;
@@ -263,12 +274,15 @@ void charge_fit() {
    double chisqr;
    int    ndf;
    TF1 *fitsnr = langaufit(hSNR,fr,sv,pllo,plhi,fp,fpe,&chisqr,&ndf);
-
+// maybe I could write the final parameters in a file
    double SNRPeak, SNRFWHM;
    langaupro(fp,SNRPeak,SNRFWHM);
 
    printf("Fitting done\nPlotting results...\n");
-   TCanvas* canvas = new TCanvas("c","c",800,600);
+   TCanvas* canvas = new TCanvas("c","c",1200,600);
+   canvas->Divide(2);
+   canvas->cd(1);
+   hSNR->GetXaxis()->SetTitle("Charge [fC]");
 
    // Global style settings
    gStyle->SetOptStat(1111);
@@ -281,8 +295,15 @@ void charge_fit() {
    fitsnr->Draw("lsame");
 
    // legend->AddEntry((TObject*)0, "Some text", "");
-   std::string save_name = file_name + "_Charge_fit_ROOT_log.svg";
-   canvas->SetLogy();
+   std::string save_name = file_dir + file_name + "_Charge_fit_ROOT_double_plot.svg";
+   
+   canvas->cd(2);
+   hSNR->GetXaxis()->SetTitle("Charge [fC]");
+   hSNR->Draw("HIST");
+   fitsnr->Draw("lsame");
+   
+   gPad->SetLogy();
+
    canvas->SaveAs(save_name.data());
 
    return ;
