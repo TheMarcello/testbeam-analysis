@@ -232,7 +232,10 @@ void charge_fit(int batch, const char* oscilloscope, int dut) {
    // std::string file_name = "charge_data_all_cuts_401_S1_3.csv";
    std::string file_name = "charge_data_all_cuts_" + this_batch + "_" + this_scope + "_" + this_dut;// + ".csv";
    std::ifstream inputFile(file_dir+file_name+".csv");
-   
+   // folder to save the results of the fit
+   std::string results_dir = "/home/marcello/Desktop/Radboud_not_synchro/Master_Thesis/testbeam-analysis/ROOT Langaus fit/Charge_fit_results/";
+   std::string results_file = "charge_fit_results_" + this_batch + "_" + this_scope + "_" + this_dut;
+
    // Check if the file is opened successfully
    if (!inputFile.is_open()) {
       std::cerr << "Error: Unable to open the file data.txt\n";
@@ -264,7 +267,7 @@ void charge_fit(int batch, const char* oscilloscope, int dut) {
    double sv[4], pllo[4], plhi[4], fp[4], fpe[4];
    // fr[0] = 4;
    // fr[1] = 100;
-   fr[0] = 0.35*hSNR->GetMean();
+   fr[0] = 0.1*hSNR->GetMean();
    fr[1] = 3.0*hSNR->GetMean();
 
    pllo[0]=0.5; pllo[1]=2.0; pllo[2]=1.0; pllo[3]=0.4;
@@ -306,6 +309,16 @@ void charge_fit(int batch, const char* oscilloscope, int dut) {
 
    canvas->SaveAs(save_name.data());
 
+   // I probably want to save the results somewhere, or return the fit parameters results
+   // MPV charge, +/- error, Width (scale) Landau,+/- error,  width (sigma) Gaussian, +/- error, chi^2, ndf, Entries, fit range left, fit range right
+
+   ofstream write_file(results_dir + results_file + ".csv");
+   if (write_file.is_open()){
+      write_file << "# results of charge fit using ROOT Langau*Gaussian convolution" << std::endl;
+      write_file << "MPV,MPV_error,scale_Landau,scale_landau_error,sigma_Gauss,sigma_Gauss_error,chi_2,ndf,n_entries,fit_range_l,fit_range_r" << std::endl;
+      write_file << fp[1] << "," << fpe[1] << "," << fp[0] << "," << fpe[0] << "," << fp[3] << "," << fpe[3] << "," << chisqr << "," << ndf << "," << size << "," << fr[0] << "," << fr[1] << std::endl;
+   }
+   write_file.close();
    return ;
 }
 
