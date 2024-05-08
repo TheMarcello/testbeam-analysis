@@ -24,7 +24,7 @@ from wrapt_timeout_decorator import timeout
 from SensorClasses import *
 
 
-PIXEL_SIZE = 0.0185 #mm
+PIXEL_SIZE = 0.0184 #mm
 
 
 def get_DUTs_from_dictionary(dictionary, oscilloscope):
@@ -225,7 +225,7 @@ def plot_histogram(data, bins='auto', poisson_err=False, error_band=False, fig_a
     return hist, bins_points, info, fig, ax
 
 
-def charge_fit(df, dut, mask, transimpedance, bins=500, p0=None, plot=True, savefig=False):
+def charge_fit(df, dut, mask, transimpedance, bins=500, p0=None, plot=True, savefig=False, **kwargs):
     """
     Function to find the best fit of the charge distribution to a Landau*Gaussian convolution
 
@@ -254,7 +254,7 @@ def charge_fit(df, dut, mask, transimpedance, bins=500, p0=None, plot=True, save
     param, covariance = curve_fit(pylandau.langau, bins_centers, hist, p0=p0)
     if plot:
         ax.plot(bins_centers, pylandau.langau(bins_centers, *param),
-                label=f"$MPV$: %.1f, $\eta$: %.1f, $\sigma$: %.1f, A: %.0f" %(param[0],param[1], param[2], param[3]))
+                label=f"$MPV$: %.1f, $\eta$: %.1f, $\sigma$: %.1f, A: %.0f" %(param[0],param[1], param[2], param[3]), **kwargs)
         ax.legend(fontsize=16)
         if savefig:
             fig.savefig(savefig)
@@ -528,7 +528,7 @@ def geometry_mask(df, DUT_number, bins, bins_find_min='rice', only_select="norma
         left_edge, right_edge = find_edges(Xtr_cut, bins=bins[0], use_kde=True)
         bottom_edge, top_edge = find_edges(Ytr_cut, bins=bins[1], use_kde=True)
     except:
-        logging.warning("in 'geometry_mask()', something wrong, no boolean mask")
+        logging.error("in 'geometry_mask()', something wrong, no boolean mask")
         return pd.Series(True, index=df.index), {}  ### return all True array if there is no minimum
     match only_select:
         case "center":
@@ -1009,7 +1009,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
 
         case other:
             logging.error(f"""{other} not a plot option. Options are:
-            '1D_Tracks', '2D_Tracks', 'pulseHeight', '2D_Sensors', '1D_Efficiency', '2D_Efficiency' """)
+            '1D_Tracks', '2D_Tracks', 'pulseHeight', '2D_Sensors', '1D_Efficiency', '2D_Efficiency', 'Time_pulseHeight', 'CFD_comparison' """)
             return
     
     ### why did I even put this here? maybe to avoid duplication, but it seems dumb now
