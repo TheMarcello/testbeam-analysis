@@ -265,10 +265,10 @@ void charge_fit(int batch, const char* oscilloscope, int dut) {
    // Setting fit range and start values
    double fr[2];
    double sv[4], pllo[4], plhi[4], fp[4], fpe[4];
-   // fr[0] = 4;
-   // fr[1] = 100;
-   fr[0] = 0.1*hSNR->GetMean();
-   fr[1] = 3.0*hSNR->GetMean();
+   fr[0] = 0;
+   fr[1] = 100;
+   // fr[0] = 0.05*hSNR->GetMean();
+   // fr[1] = 5.0*hSNR->GetMean();
 
    pllo[0]=0.5; pllo[1]=2.0; pllo[2]=1.0; pllo[3]=0.4;
    plhi[0]=5.0; plhi[1]=50.0; plhi[2]=1000000.0; plhi[3]=5.0;
