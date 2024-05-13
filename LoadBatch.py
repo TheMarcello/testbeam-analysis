@@ -378,21 +378,24 @@ def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, pl
     for i in range(number_of_tries):
         try:
             smoothed_hist = time_limited_kde_evaluate(kde, bins_centers) * density_factor 
-        except:          ### now take only half of the points to be evaluated
+        except TimeoutError:          ### now take only half of the points to be evaluated
             logging.info(f"Evaluating kde timeout n°: {i+1}. Trying with 1/2 number of points")
             bins_centers = bins_centers[::2] 
             density_factor = density_factor[::2]
             if i==(number_of_tries-1):
                 logging.warning("Giving up evaluating kde")
                 return None
-        else:
+        except:
+            logging.error(f"Unknown error evaluation kde")
+            break
+        else:   ### when no exception occurs
             break
     ### it plots before it tries to find peaks and/or min
     if plot:    ax.plot(bins_centers, smoothed_hist, linewidth=1, label='Smoothed hist')
     if not peak_prominence: peak_prominence = np.max(hist)/100
     if not min_prominence:  min_prominence = np.max(hist)/100
     recursion_depth = 0  # 0 or 1, not sure which one gives 'max_recursion' tries
-    max_recursion = 20 # or 10
+    max_recursion = 10 # 10 or 20
 
     while(recursion_depth<max_recursion):
             ### find (hopefully two) peaks and plot them
