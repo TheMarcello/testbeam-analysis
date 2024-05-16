@@ -395,9 +395,9 @@ def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, pl
     if not peak_prominence: peak_prominence = np.max(hist)/100
     if not min_prominence:  min_prominence = np.max(hist)/100
     recursion_depth = 0  # 0 or 1, not sure which one gives 'max_recursion' tries
-    max_recursion = 10 # 10 or 20
+    max_recursion = 20 # 10 or 20
 
-    while(recursion_depth<max_recursion):
+    while(recursion_depth<=max_recursion):
             ### find (hopefully two) peaks and plot them
         peaks_idx, info_peaks = find_peaks(smoothed_hist, prominence=peak_prominence)
         global_max_idx = np.argmax(smoothed_hist)
@@ -408,7 +408,7 @@ def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, pl
             local_min, _ = find_peaks(-smoothed_hist[peaks_idx[0]:peaks_idx[1]], prominence=min_prominence)
             
         else:    ### if it doesn't work it's because only one peak was found
-            logging.info("Two peaks not found, retrying")
+            logging.debug("Two peaks not found, retrying")
             recursion_depth += 1
             if recursion_depth==max_recursion:
                 logging.warning(f"Two PEAKS not found after {recursion_depth} iterations")
@@ -795,13 +795,15 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                     else:
                         axes[i].axhline(pulse_cut, color='r', label="PulseHeight cut value: %.1f mV"%pulse_cut)
                     time_info = time_mask(df, dut, bins=bins, plot=False)[1]
-                    left_base, right_base = time_info['left_base'], time_info['right_base']
-                    axes[i].axvline(left_base, color='g', alpha=.9, label="Time cut: %.0fps$<\Delta t<$ %.0fps"%(left_base, right_base))
-                    axes[i].axvline(right_base, color='g', alpha=.9)
+                    if time_info is not None:
+                        left_base, right_base = time_info['left_base'], time_info['right_base']
+                        axes[i].axvline(left_base, color='g', alpha=.9, label="Time cut: %.0fps$<\Delta t<$ %.0fps"%(left_base, right_base))
+                        axes[i].axvline(right_base, color='g', alpha=.9)
+                        axes[i].legend(fontsize=16, loc='best', framealpha=0) ### only show legend if there is something inside
+
                 axes[i].set_xlabel(f"$\Delta t$ [ps] (DUT {dut} - MCP)", fontsize=16)
                 axes[i].set_ylabel(f"PulseHeight [mV]", fontsize=16)
                 axes[i].grid('--')
-                axes[i].legend(fontsize=16, loc='best', framealpha=0)
                 plot_title = f"DUT: {batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
                 axes[i].set_title(plot_title, fontsize=16)
 
@@ -810,7 +812,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 ylim = axes[i].get_ylim()
                 axes[i].set_ylim(ylim[0],ylim[1]*1.1)  ### to leave space for the legend
 
-                if extra_info:
+                if extra_info and time_info is not None:
                     total = len(time_array)/100  ### so I get percentage directly
                     axes[i].annotate(f"%.3f"%(len(time_array[np.logical_and(time_array<left_base, pulseheight_array<pulse_cut)])/total)+"%", ((xlim[0]+left_base)/2, (2*ylim[0]+pulse_cut)/3), fontsize=16)
                     axes[i].annotate(f"%.3f"%(len(time_array[np.logical_and(time_array>right_base, pulseheight_array<pulse_cut)])/total)+"%", ((right_base+xlim[1])/2, (2*ylim[0]+pulse_cut)/3), fontsize=16)
@@ -905,8 +907,11 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 im = axes[i].imshow(efficiency_map.T, origin='lower', extent=[x_edges[0], x_edges[-1], y_edges[0], y_edges[-1]], ### extent is full data range
                         aspect='equal', vmin=0, vmax=100)   # aspect='equal' or 'auto'?
                 if zoom_to_sensor and geometry_cut:         ### this only sets the data shown
-                    axes[i].set_xlim(edges['left_edge'],edges['right_edge'])
-                    axes[i].set_ylim(edges['bottom_edge'],edges['top_edge'])
+                    if edges:
+                        axes[i].set_xlim(edges['left_edge'],edges['right_edge'])
+                        axes[i].set_ylim(edges['bottom_edge'],edges['top_edge'])
+                    else:
+                        logging.warning(f"Geometry cut failed, no edges set as limits")
                 
                 # axes[i].grid('--')
                 plot_title = f"Ch{dut+1}\n{batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"

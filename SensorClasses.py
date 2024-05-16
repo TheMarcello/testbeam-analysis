@@ -23,13 +23,11 @@ class Sensor:
     fluence:        radiation given to the sensor [units?]
     transimpedance: transimpedance, it depends on the board (used to calculate charge) [units?]
     """
-    def __init__(self, name, dut_position, voltage, angle=0, board=NO_BOARD, fluence=-1, transimpedance=-1):
+    def __init__(self, name=NO_BOARD, dut_position=0, voltage=0, board=NO_BOARD, fluence=-1, transimpedance=-1):
         self.name = name
-        # self.angle = angle
         self.board = board
         self.dut_position = dut_position
         self.fluence = fluence
-        ### I could add the temperature too, so I have both (each run and each batch)
         self.transimpedance = transimpedance
         self.voltage = voltage
 
@@ -44,13 +42,17 @@ class Oscilloscope:
     add_sensor:     add a Sensor to the specified channel
     get_sensor:     get a Sensor from the specified channel
     """
-    def __init__(self, name, sensor1=None, sensor2=None, sensor3=None, sensor4=None):
+    def __init__(self, name, runs, sensor1=Sensor(), sensor2=Sensor(), sensor3=Sensor(), sensor4=Sensor()):
         self.name = name
         self.channels = {'Ch1':sensor1, 'Ch2':sensor2, 'Ch3':sensor3, 'Ch4':sensor4}
-    
+        self.runs = runs
+
     def add_sensor(self, channel, sensor):
         self.channels[channel] = sensor
-    
+        ### should I add the "set_fluence()" things here??
+        ### so that it only gets initialised when I add the sensor?
+        ### yes, I think that's better but I don't know how easy it is to change
+            
     def get_sensor(self, ch):
         match ch:
             case 'Ch1' | 'ch1' |'Ch_1' | 'ch_1' : return self.channels['Ch1']
@@ -68,16 +70,20 @@ class Batch:
     batch_number:   batch number
     angle:          angle to the beam   [°degrees] ### I should put it into the sensor
     runs:           list of run numbers belonging to the same batch
-    tempA:          temperature of thermometer A [°C]
-    tempB:          temperature of thermometer B [°C]
+    temperature:    average temperature [°C]
+    tempA:          list of temperatures of thermometer A [°C]
+    tempB:          list of temperature of thermometer B [°C]
     S1, S2:         Oscilloscope objects 1 and 2
 
     set_fluence_boards():   sets board names and fluences (only for __init__)
     """
-    def __init__(self, batch_number, angle, runs, temperatureA, temperatureB, S1, S2):#):
+    ### maybe I can put: temperatue (as average of all temperatures)
+    ###                  tempA and tempB a list of all the temperatures for each run
+    def __init__(self, batch_number, angle, temperature_avg, temperatureA, temperatureB, S1, S2):#):
         self.batch_number = batch_number
         self.angle = angle
-        self.runs = runs
+        # self.runs = runs
+        self.temperature = temperature_avg
         self.tempA = temperatureA
         self.tempB = temperatureB
         self.S = {'S1':S1, 'S2':S2} ### this is a bit overly nested but it's useful for a loop like: "S in ['S1','S2']:"
@@ -189,7 +195,7 @@ class Batch:
         assigns transimpedance to each sensor depending on the board
         """
         single_ch_transimpedance = 4700 #mV*ps/fC (I think)
-        four_ch_transimpedance = 10700 
+        four_ch_transimpedance = 4700 ### actually this is wrong, they are all 4700
         for S,scope in self.S.items():
             for ch, sensor in scope.channels.items():
                 if 'CERN' in sensor.board and 'CERN-4' not in sensor.board: ### boards CERN-1,CERN-2,CERN-3
