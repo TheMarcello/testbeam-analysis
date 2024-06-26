@@ -702,7 +702,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             else:       fig, axes = plt.subplots(nrows=1, ncols=len(n_DUT), figsize=(6*len(n_DUT),6), sharex='all', sharey=False, dpi=200)
             fig.tight_layout()
             if bins is None: bins = (200,200)   ### default binning
-            if len(n_DUT)==1: axes = np.array([axes]) ### for simplicity, so I can use axes[i] for a single DUT  ### for simplicity, so I can use axes[i] for a single DUT 
+            if axes.ndim==1: axes = np.array([axes]) ### for simplicity, so I can use axes[i] for a single DUT  ### for simplicity, so I can use axes[i] for a single DUT 
             for i,dut in enumerate(n_DUT):
 
                 if mask:  hist, _, _, im = axes[i].hist2d(df[f"Xtr_{dut-1}"].loc[mask[dut-1]], df[f"Ytr_{dut-1}"].loc[mask[dut-1]], bins=bins, **kwrd_arg)
@@ -744,7 +744,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             else:       fig, axes = plt.subplots(nrows=2, ncols=len(n_DUT), figsize=(6*len(n_DUT),12), sharex=False, sharey=False, dpi=200)
             if bins is None: bins = (200,200)   ### default binning
             fig.tight_layout(w_pad=6, h_pad=6)
-            if len(n_DUT)==1: axes = axes[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case
+            if axes.ndim==1: axes = axes[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case
             for i,dut in enumerate(n_DUT): 
                 print(f"DUT_{dut}")                   ### BINS: scott, rice or sqrt; stone seems slow, rice seems the fastest
                 minimum = find_min_btw_peaks(df[f"pulseHeight_{dut}"], bins=bins_find_min, plot=True, fig_ax=(fig,axes[0,i]), savefig=False)
@@ -776,7 +776,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             else:       fig, axes = plt.subplots(figsize=(8*len(n_DUT),8), ncols=len(n_DUT), dpi=300, subplot_kw={'projection':'scatter_density'}) 
             xlim = (-8e3,-3e3)
             if bins is None: bins = 10000  ### default binning
-            if len(n_DUT)==1: axes = np.array([axes]) ### for simplicity, so I can use axes[i] for a single DUT  ### for simplicity, so I can use axes[i] for a single DUT 
+            if axes.ndim==1: axes = np.array([axes]) ### for simplicity, so I can use axes[i] for a single DUT  ### for simplicity, so I can use axes[i] for a single DUT 
 
             for i,dut in enumerate(n_DUT):
                 if mask:
@@ -833,7 +833,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             if bins is None: bins = (200)       ### default binning
             if fig_ax:  fig, axes = fig_ax
             else:       fig, axes = plt.subplots(nrows=2, ncols=len(n_DUT), figsize=(6*len(n_DUT),12), sharex=False, sharey=True, dpi=200)
-            if len(n_DUT)==1: axes = axes[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case           
+            if axes.ndim==1: axes = axes[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case           
             fig.tight_layout(w_pad=6, h_pad=10)
             if efficiency_lim is None: ylim = (0.4, 1)
             else: ylim = efficiency_lim
@@ -887,7 +887,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             else:       fig, axes = plt.subplots(nrows=1, ncols=len(n_DUT), figsize=(6*len(n_DUT),6), sharex=False, sharey=False, dpi=200)
             if bins is None: bins = (200,200)       ### default binning
             fig.tight_layout(w_pad=10)
-            if len(n_DUT)==1: axes = np.array([axes]) ### for simplicity, so I can use axes[i] for a single DUT  ### for simplicity, so I can use axes[i] for a single DUT 
+            if axes.ndim==1: axes = np.array([axes]) ### for simplicity, so I can use axes[i] for a single DUT  ### for simplicity, so I can use axes[i] for a single DUT 
             for i,dut in enumerate(n_DUT):
                 if geometry_cut and mask: 
                     geo_mask, edges = geometry_mask(df, DUT_number=dut, bins=bins, bins_find_min=bins_find_min, only_select=geometry_cut, use=use)    ### this is a boolean mask of the selected positions
