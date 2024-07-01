@@ -684,6 +684,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             if fig_ax:  fig, axes = fig_ax
             else:       fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(18,6), dpi=200, sharey='all')
             if bins is None: bins = (200,200)   ### default binning
+            axes = np.atleast_1d(axes)          ### for simplicity, so I can use axes[i] for a single DUT  
             for dut in n_DUT:
                 sensor_label = f"DUT: {batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
                 plot_histogram(df[f"Xtr_{dut-1}"], label=sensor_label, bins=bins[0], fig_ax=(fig,axes[0]), **kwrd_arg)
@@ -702,7 +703,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             else:       fig, axes = plt.subplots(nrows=1, ncols=len(n_DUT), figsize=(6*len(n_DUT),6), sharex='all', sharey=False, dpi=200)
             fig.tight_layout()
             if bins is None: bins = (200,200)   ### default binning
-            if axes.ndim==1: axes = np.array([axes]) ### for simplicity, so I can use axes[i] for a single DUT  ### for simplicity, so I can use axes[i] for a single DUT 
+            axes = np.atleast_1d(axes)          ### for simplicity, so I can use axes[i] for a single DUT  
             for i,dut in enumerate(n_DUT):
 
                 if mask:  hist, _, _, im = axes[i].hist2d(df[f"Xtr_{dut-1}"].loc[mask[dut-1]], df[f"Ytr_{dut-1}"].loc[mask[dut-1]], bins=bins, **kwrd_arg)
@@ -733,8 +734,6 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             axes.semilogy()
             axes.set_xlabel("PulseHeight [mV]", fontsize=20)
             axes.set_ylabel("Events (log)", fontsize=20)
-            ### this is redundant
-            # axes.set_title(f"PulseHeight (no cut), batch {batch_object.batch_number}, bins {bins}", fontsize=24, y=1.05)
             axes.set_xlim(left=-10)
             axes.legend(fontsize=20)
             if title_position is None: title_position = 1.05
@@ -744,7 +743,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             else:       fig, axes = plt.subplots(nrows=2, ncols=len(n_DUT), figsize=(6*len(n_DUT),12), sharex=False, sharey=False, dpi=200)
             if bins is None: bins = (200,200)   ### default binning
             fig.tight_layout(w_pad=6, h_pad=6)
-            if axes.ndim==1: axes = axes[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case
+            axes = np.atleast_2d(axes)      ### so I can call axes[i,j] in any case
             for i,dut in enumerate(n_DUT): 
                 print(f"DUT_{dut}")                   ### BINS: scott, rice or sqrt; stone seems slow, rice seems the fastest
                 minimum = find_min_btw_peaks(df[f"pulseHeight_{dut}"], bins=bins_find_min, plot=True, fig_ax=(fig,axes[0,i]), savefig=False)
@@ -776,7 +775,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             else:       fig, axes = plt.subplots(figsize=(8*len(n_DUT),8), ncols=len(n_DUT), dpi=300, subplot_kw={'projection':'scatter_density'}) 
             xlim = (-8e3,-3e3)
             if bins is None: bins = 10000  ### default binning
-            if axes.ndim==1: axes = np.array([axes]) ### for simplicity, so I can use axes[i] for a single DUT  ### for simplicity, so I can use axes[i] for a single DUT 
+            axes = np.atleast_1d(axes) ### for simplicity, so I can use axes[i] for a single DUT  ### for simplicity, so I can use axes[i] for a single DUT 
 
             for i,dut in enumerate(n_DUT):
                 if mask:
@@ -833,7 +832,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             if bins is None: bins = (200)       ### default binning
             if fig_ax:  fig, axes = fig_ax
             else:       fig, axes = plt.subplots(nrows=2, ncols=len(n_DUT), figsize=(6*len(n_DUT),12), sharex=False, sharey=True, dpi=200)
-            if axes.ndim==1: axes = axes[...,np.newaxis]  ### add an empty axis so I can call axes[i,j] in any case           
+            axes = np.atleast_2d(axes)  ### add an empty axis so I can call axes[i,j] in any case           
             fig.tight_layout(w_pad=6, h_pad=10)
             if efficiency_lim is None: ylim = (0.4, 1)
             else: ylim = efficiency_lim
@@ -853,7 +852,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                     above_threshold = np.logical_and(bool_mask, events_above_threshold)
                     
                     total_events_in_bin, bins_edges = np.histogram(df[f"{XY}tr_{dut-1}"].loc[bool_mask], bins=bins[coord_idx])
-                    events_above_threshold_in_bin,m_  = np.histogram(df[f"{XY}tr_{dut-1}"].loc[above_threshold], bins=bins[coord_idx])
+                    events_above_threshold_in_bin, _  = np.histogram(df[f"{XY}tr_{dut-1}"].loc[above_threshold], bins=bins[coord_idx])
 
                     bins_centers = (bins_edges[:-1]+bins_edges[1:])/2
                     eff, err = efficiency_k_n(events_above_threshold_in_bin, total_events_in_bin)
@@ -874,8 +873,9 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                             logging.error("in plot(), could not set limits to geometry_cut")
                     ### calculate average only between limits of the plot
                     between_edges = np.logical_and(bins_centers>axes[coord_idx,i].get_xlim()[0], bins_centers<axes[coord_idx,i].get_xlim()[1])
-                    efficiency_bar = np.average(eff[between_edges]) ### horizontal line at this efficiency %
-                    axes[coord_idx,i].axhline(efficiency_bar, label=f"Average efficiency: %.2f"%(efficiency_bar*100)+'%', color='r', alpha=0.4, linewidth=2)
+                    if extra_info:  ### include (or not) extra information
+                        efficiency_bar = np.average(eff[between_edges]) ### horizontal line at this efficiency %
+                        axes[coord_idx,i].axhline(efficiency_bar, label=f"Average efficiency: %.2f"%(efficiency_bar*100)+'%', color='r', alpha=0.4, linewidth=2)
                     axes[coord_idx,i].grid('--')
                     axes[coord_idx,i].legend(fontsize=14)
             if title_position is None: title_position = 1.1
@@ -887,7 +887,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             else:       fig, axes = plt.subplots(nrows=1, ncols=len(n_DUT), figsize=(6*len(n_DUT),6), sharex=False, sharey=False, dpi=200)
             if bins is None: bins = (200,200)       ### default binning
             fig.tight_layout(w_pad=10)
-            if axes.ndim==1: axes = np.array([axes]) ### for simplicity, so I can use axes[i] for a single DUT  ### for simplicity, so I can use axes[i] for a single DUT 
+            axes = np.atleast_1d(axes)      ### for simplicity, so I can use axes[i] for a single DUT 
             for i,dut in enumerate(n_DUT):
                 if geometry_cut and mask: 
                     geo_mask, edges = geometry_mask(df, DUT_number=dut, bins=bins, bins_find_min=bins_find_min, only_select=geometry_cut, use=use)    ### this is a boolean mask of the selected positions
