@@ -682,7 +682,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
     match plot_type:
         case "1D_Tracks":        ### 1D tracks plots
             if fig_ax:  fig, axes = fig_ax
-            else:       fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(18,6), dpi=200, sharey='all')
+            else:       fig, axes = plt.subplots(nrows=1, ncols=2, figsize=(18,6), constrained_layout=True, dpi=200, sharey='all')
             if bins is None: bins = (200,200)   ### default binning
             axes = np.atleast_1d(axes)          ### for simplicity, so I can use axes[i] for a single DUT  
             for dut in n_DUT:
@@ -700,8 +700,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             
         case "2D_Tracks":        ### 2D tracks plots
             if fig_ax:  fig, axes = fig_ax
-            else:       fig, axes = plt.subplots(nrows=1, ncols=len(n_DUT), figsize=(6*len(n_DUT),6), sharex='all', sharey=False, dpi=200)
-            fig.tight_layout()
+            else:       fig, axes = plt.subplots(nrows=1, ncols=len(n_DUT), figsize=(6*len(n_DUT),6), constrained_layout=True, sharex='all', sharey=False, dpi=200)
             if bins is None: bins = (200,200)   ### default binning
             axes = np.atleast_1d(axes)          ### for simplicity, so I can use axes[i] for a single DUT  
             for i,dut in enumerate(n_DUT):
@@ -719,13 +718,13 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 secx.set_xlabel('mm', fontsize=20)
                 secy.set_ylabel('mm', fontsize=20)
             if title_position is None: title_position = 1.05
-            fig.tight_layout(w_pad=6, h_pad=4)
+            # fig.tight_layout(w_pad=6, h_pad=4)
             cb = fig.colorbar(im, ax=axes.ravel().tolist(), fraction=0.1/len(n_DUT), pad=0.1) ### these numbers need adjusting
             cb.set_label(label="Reconstructed tracks", fontsize=16)
 
         case "pulseHeight":       ### PulseHeight plot
             if fig_ax:  fig, axes = fig_ax
-            else:       fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(10,6), dpi=200)
+            else:       fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(10,6), constrained_layout=True, dpi=200)
             if bins is None: bins = 'rice'  ### default binning
             # for i in n_DUT.insert(0,0):
             for dut in n_DUT:
@@ -740,10 +739,10 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             
         case "2D_Sensors":        ### 2D tracks plots filtering noise out (also include pulseHeight plot)
             if fig_ax:  fig, axes = fig_ax
-            else:       fig, axes = plt.subplots(nrows=2, ncols=len(n_DUT), figsize=(6*len(n_DUT),12), sharex=False, sharey=False, dpi=200)
+            else:       fig, axes = plt.subplots(nrows=2, ncols=len(n_DUT), figsize=(6*len(n_DUT),12), constrained_layout=True, sharex=False, sharey=False, dpi=200)
             if bins is None: bins = (200,200)   ### default binning
-            fig.tight_layout(w_pad=6, h_pad=6)
-            axes = np.atleast_2d(axes)      ### so I can call axes[i,j] in any case
+            # fig.tight_layout(w_pad=6, h_pad=6)
+            axes = np.atleast_2d(axes.T).T      ### so I can call axes[i,j] in any case (I add .T because np.atleast_2d makes only axes[0,i] available, and I want axes[i,0])
             for i,dut in enumerate(n_DUT): 
                 print(f"DUT_{dut}")                   ### BINS: scott, rice or sqrt; stone seems slow, rice seems the fastest
                 minimum = find_min_btw_peaks(df[f"pulseHeight_{dut}"], bins=bins_find_min, plot=True, fig_ax=(fig,axes[0,i]), savefig=False)
@@ -765,7 +764,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 secy = axes[1,i].secondary_yaxis('right', functions=(lambda x: x*PIXEL_SIZE, lambda y: y*PIXEL_SIZE))
                 secx.set_xlabel('mm', fontsize=20)
                 secy.set_ylabel('mm', fontsize=20)
-            if title_position is None: title_position = 1.15
+            if title_position is None: title_position = 1.05
             cb = fig.colorbar(im, ax=axes[1], fraction=0.1/len(n_DUT), pad=0.1)   ### this colorbar only counts the last 'im', not good
             cb.set_label(label="Reconstructed tracks", fontsize=16)
 
@@ -831,9 +830,9 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
         case "1D_Efficiency":
             if bins is None: bins = (200)       ### default binning
             if fig_ax:  fig, axes = fig_ax
-            else:       fig, axes = plt.subplots(nrows=2, ncols=len(n_DUT), figsize=(6*len(n_DUT),12), sharex=False, sharey=True, dpi=200)
+            else:       fig, axes = plt.subplots(nrows=2, ncols=len(n_DUT), figsize=(6*len(n_DUT),12), constrained_layout=True, sharex=False, sharey=True, dpi=200)
             axes = np.atleast_2d(axes)  ### add an empty axis so I can call axes[i,j] in any case           
-            fig.tight_layout(w_pad=6, h_pad=10)
+            # fig.tight_layout(w_pad=6, h_pad=10)
             if efficiency_lim is None: ylim = (0.4, 1)
             else: ylim = efficiency_lim
             for i,dut in enumerate(n_DUT):
@@ -884,9 +883,9 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
 
         case "2D_Efficiency":  
             if fig_ax:  fig, axes = fig_ax
-            else:       fig, axes = plt.subplots(nrows=1, ncols=len(n_DUT), figsize=(6*len(n_DUT),6), sharex=False, sharey=False, dpi=200)
+            else:       fig, axes = plt.subplots(nrows=1, ncols=len(n_DUT), figsize=(6*len(n_DUT),6), constrained_layout=True, sharex=False, sharey=False, dpi=200)
             if bins is None: bins = (200,200)       ### default binning
-            fig.tight_layout(w_pad=10)
+            # fig.tight_layout(w_pad=10)
             axes = np.atleast_1d(axes)      ### for simplicity, so I can use axes[i] for a single DUT 
             for i,dut in enumerate(n_DUT):
                 if geometry_cut and mask: 
@@ -1022,7 +1021,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
     
     ### why did I even put this here? maybe to avoid duplication, but it seems dumb now
     fig.suptitle(f"{plot_type}, batch: {batch_object.batch_number} {savefig_details}", fontsize=24, y=title_position)
-    # plt.show()  ### this prevents additional things to show up
+
     if savefig: 
         file_name = f"{plot_type}_{batch_object.batch_number}{savefig_details}.{fmt}"
         fig.savefig(os.path.join(savefig_path, file_name), bbox_inches="tight")
