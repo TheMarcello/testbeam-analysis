@@ -831,7 +831,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             if bins is None: bins = (200)       ### default binning
             if fig_ax:  fig, axes = fig_ax
             else:       fig, axes = plt.subplots(nrows=2, ncols=len(n_DUT), figsize=(6*len(n_DUT),12), constrained_layout=True, sharex=False, sharey=True, dpi=200)
-            axes = np.atleast_2d(axes)  ### add an empty axis so I can call axes[i,j] in any case           
+            axes = np.atleast_2d(axes.T).T  ### add an empty axis so I can call axes[i,j] in any case           
             # fig.tight_layout(w_pad=6, h_pad=10)
             if efficiency_lim is None: ylim = (0.4, 1)
             else: ylim = efficiency_lim
