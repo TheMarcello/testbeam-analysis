@@ -48,7 +48,7 @@ def read_pickle(file):
     """
     Read the '.pickle' file containing all the list of sensors for each batch, oscilloscope, channel
     
-    Parameters
+    Arguments
     ----------
     file:           file path to the .pickle c
 
@@ -65,7 +65,7 @@ def load_batch(batch_number, oscilloscope, branches=None,
               data_path=f"../Data_TestBeam/2023_May/"):
     """"
     Load all the data from the .root file of one batch and one oscilloscope into a pandas.Dataframe. \n
-    Parameters
+    Arguments
     ----------
     batch_number:       number of the batch
     oscilloscope:       string for oscilloscope: 'S1' or 'S2'
@@ -149,7 +149,7 @@ def root_to_df(file_path, branches):
     """
     Converts a file.root into pandas DataFrame unpacking branches with multiple channels \
 into 'Branch_0', 'Branch_1' etc. \n
-    Parameters
+    Arguments
     ----------
     file_path:  full or relative path of the .root file with the Ntuples
     branches:   list of branches of the tree to be imported into the dataframe
@@ -180,7 +180,7 @@ into 'Branch_0', 'Branch_1' etc. \n
 def plot_histogram(data, bins='auto', poisson_err=False, error_band=False, fig_ax=None, label=None, **kwrd_arg):
     """
     Plot a simple (list of) histogram with optionally the poissonian error. \n
-    Parameters
+    Arguments
     ----------
     data:       (list of) data to plotted as histogram
     bins:       matplot bins options e.g. int (number of bins), list (bin edges)
@@ -229,7 +229,7 @@ def charge_fit(df, dut, mask, transimpedance, bins=500, p0=None, plot=True, save
     """
     Function to find the best fit of the charge distribution to a Landau*Gaussian convolution
 
-    Parameters
+    Arguments
     ----------
     df:         (full) dataframe of the data
     dut:        dut number to be studied (1,2,3)
@@ -275,7 +275,7 @@ def extend_edges(left_edge, right_edge, fraction=0.2):
 def efficiency(data, threshold, percentage=True):
     """
     Efficiency of the data: data greater than threshold value / total data. \n
-    Parameters
+    Arguments
     ----------
     data:       data to evaluate efficiency
     threshold:  thrshold value
@@ -296,7 +296,7 @@ def efficiency(data, threshold, percentage=True):
 def efficiency_error(data, threshold):
     """
     Efficiency of the data, including error (adjusted as in https://arxiv.org/pdf/physics/0701199v1.pdf) \n
-    Parameters
+    Arguments
     ----------
     data:       data to evaluate efficiency
     threshold:  thrshold value
@@ -317,7 +317,7 @@ def efficiency_error(data, threshold):
 def efficiency_k_n(k,n):
     """
     Efficiency and its error (as in https://arxiv.org/pdf/physics/0701199v1.pdf) \n
-    Parameters
+    Arguments
     ----------
     k:      (array of) int, selected elements
     n:      (array of) int, total elements
@@ -343,7 +343,7 @@ def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, pl
                        savefig=False, savefig_path='../various plots/', savefig_details='', fig_ax=None):
     """
     Finds the minimun between two peaks, using 'find_peaks()' function. \n
-    Parameters
+    Arguments
     ----------
     data:           data to be transformed into histogram and of which to find the peaks (e.g. df['pulseHeight_1'])
     bins:           matplot bins options e.g. int (number of bins), list (bin edges), str (method)
@@ -442,7 +442,7 @@ def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, pl
 def find_edges(data, bins='rice', use_kde=True, plot=False):
     """
     Finds the 'edges' of the dut (sensor) using the gradient of the hits distribution. \n
-    Parameters
+    Arguments
     ----------
     data:       data to be put into histogram to find the edges
     bins:       matplot bins options e.g. int (number of bins), list (bin edges)
@@ -488,7 +488,7 @@ def geometry_mask(df, DUT_number, bins, bins_find_min='rice', only_select="norma
     Creates a boolean mask for selecting the 2D shape of the dut (sensor) by applying a pulseHeight cut.
     If the minimum of the pulseHeight could not be found it returns all True
 
-    Parameters
+    Arguments
     ----------
     df:             full dataframe because it needs pulseHeight, Xtr and Ytr
     bins:           bins options for  "Xtr" and "Ytr"
@@ -575,7 +575,7 @@ def time_mask(df, DUT_number, bins=10000, mask=None, p0=None, sigmas=3, plot=Fal
     Creates a boolean mask using a gaussian+background fit of the time difference between DUT and MCP.
     The fit is done in the time window -20e3 :_: 20e3
 
-    Parameters
+    Arguments
     ----------
     df:         dataframe containing the 'timeCFD50_0' and 'timeCFD20_dut'
     DUT_number: number of the selected dut for the time_mask filter
@@ -635,7 +635,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
         **kwrd_arg):
     """
     Function to produce the plots \n
-    Parameters
+    Arguments
     ----------
     df:             FULL dataframe of the data to plot (each plot_type select the data it needs)
     plot_type:      type of plot, options are:
