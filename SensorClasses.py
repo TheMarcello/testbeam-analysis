@@ -38,14 +38,19 @@ class Oscilloscope:
     ------------
     name:           name of the oscilloscope ('S1' or 'S2' usually)
     channels:       dictionary of the 4 channels: {'Ch1':sensor1, etc.}
+    runs:           list of runs (some runs where excluded so they could be different btw oscilloscopes)
+    tempA:          list of temperatures, thermometer A ( " " )
+    tempB:          list of temperatures, thermometer B ( " " )
     ------------
     add_sensor:     add a Sensor to the specified channel
     get_sensor:     get a Sensor from the specified channel
     """
-    def __init__(self, name, runs, sensor1=Sensor(), sensor2=Sensor(), sensor3=Sensor(), sensor4=Sensor()):
+    def __init__(self, name, runs, temperatureA, temperatureB, sensor1=Sensor(), sensor2=Sensor(), sensor3=Sensor(), sensor4=Sensor()):
         self.name = name
         self.channels = {'Ch1':sensor1, 'Ch2':sensor2, 'Ch3':sensor3, 'Ch4':sensor4}
         self.runs = runs
+        self.tempA = temperatureA
+        self.tempB = temperatureB
 
     def add_sensor(self, channel, sensor):
         self.channels[channel] = sensor
@@ -79,13 +84,13 @@ class Batch:
     """
     ### maybe I can put: temperatue (as average of all temperatures)
     ###                  tempA and tempB a list of all the temperatures for each run
-    def __init__(self, batch_number, angle, temperature_avg, temperatureA, temperatureB, S1, S2):#):
+    def __init__(self, batch_number, angle, temperature_avg, S1, S2):#):
         self.batch_number = batch_number
         self.angle = angle
-        # self.runs = runs
         self.temperature = temperature_avg
-        self.tempA = temperatureA
-        self.tempB = temperatureB
+        # self.runs = runs
+        # self.tempA = temperatureA
+        # self.tempB = temperatureB
         self.S = {'S1':S1, 'S2':S2} ### this is a bit overly nested but it's useful for a loop like: "S in ['S1','S2']:"
         self.set_fluence_boards()
         self.set_transimpedance()
@@ -195,13 +200,13 @@ class Batch:
         assigns transimpedance to each sensor depending on the board
         """
         single_ch_transimpedance = 4700 #mV*ps/fC (I think)
-        four_ch_transimpedance = 4700 ### actually this is wrong, they are all 4700
+        four_ch_transimpedance = 4700 ### actually this was wrong, they are all 4700
         for S,scope in self.S.items():
             for ch, sensor in scope.channels.items():
                 if 'CERN' in sensor.board and 'CERN-4' not in sensor.board: ### boards CERN-1,CERN-2,CERN-3
                     sensor.transimpedance = four_ch_transimpedance
                 elif sensor.board == NO_BOARD:                              ### no board name
-                    logging.info("in set_transimpedance(): No board name assigned: no transimpedance set")
+                    logging.info(f"in set_transimpedance(): No board name assigned: no transimpedance set")
                 elif sensor.board is not None and sensor.board != NO_BOARD: ### all the other options
                     sensor.transimpedance = single_ch_transimpedance
                 else:                                                       ### probably board name is None
