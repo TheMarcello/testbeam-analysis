@@ -75,18 +75,18 @@ class Batch:
     batch_number:   batch number
     angle:          angle to the beam   [°degrees] ### I should put it into the sensor
     runs:           list of run numbers belonging to the same batch
+    humidity:       humidity (%) inside the cooling box
     temperature:    average temperature [°C]
-    tempA:          list of temperatures of thermometer A [°C]
-    tempB:          list of temperature of thermometer B [°C]
     S1, S2:         Oscilloscope objects 1 and 2
 
     set_fluence_boards():   sets board names and fluences (only for __init__)
     """
     ### maybe I can put: temperatue (as average of all temperatures)
     ###                  tempA and tempB a list of all the temperatures for each run
-    def __init__(self, batch_number, angle, temperature_avg, S1, S2):#):
+    def __init__(self, batch_number, angle, humidity, temperature_avg, S1, S2):#):
         self.batch_number = batch_number
         self.angle = angle
+        self.humidity = humidity
         self.temperature = temperature_avg
         # self.runs = runs
         # self.tempA = temperatureA
