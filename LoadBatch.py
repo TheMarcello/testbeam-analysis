@@ -62,7 +62,7 @@ def read_pickle(file):
 
 
 def load_batch(batch_number, oscilloscope, branches=None,
-              data_path=f"../Data_TestBeam/2023_May/"):
+              data_path=f"/home/marcello/Desktop/Radboud_not_synchro/Master_Thesis/Data_TestBeam/2023_May/"):
     """"
     Load all the data from the .root file of one batch and one oscilloscope into a pandas.Dataframe. \n
     Arguments
@@ -85,14 +85,14 @@ def load_batch(batch_number, oscilloscope, branches=None,
     try:
         df = root_to_df(os.path.join(dir_path, file_path), branches)
     except FileNotFoundError:
-        logging.error("Batch file not found")
+        logging.error(f"File of batch {batch_number} not found")
         return
     df = df.drop(columns=columns_to_remove)
     return df
     
 
+### this IS NOT necessary anymore
 # ### pretty ugly but no alternatives right now
-### this should not be necessary anymore
 # def get_transimpedance(batch, oscilloscope):
 #     """
 #     Pretty ugly function that links each batch to the transimpedance value of the board \
@@ -248,13 +248,15 @@ def charge_fit(df, dut, mask, transimpedance, bins=500, p0=None, plot=True, save
     else:       hist,my_bins = np.histogram(df[f'charge_{dut}'].loc[mask]/transimpedance, bins=bins)
     bins_centers = (my_bins[1:]+my_bins[:-1])/2
     bins_centers = bins_centers.astype(np.float64)
-    charge = bins_centers[np.argmax(hist)]
-    logging.info(f'First charge estimate: {charge}')
-    if p0 is None: p0 = (np.abs(charge),1,1,np.max(hist))
+    charge_estimate = bins_centers[np.argmax(hist)]
+    logging.info(f'First charge estimate: {charge_estimate}')
+    if p0 is None: p0 = (np.abs(charge_estimate),1,1,np.max(hist))
     param, covariance = curve_fit(pylandau.langau, bins_centers, hist, p0=p0)
     if plot:
         ax.plot(bins_centers, pylandau.langau(bins_centers, *param),
                 label=f"$MPV$: %.1f, $\eta$: %.1f, $\sigma$: %.1f, A: %.0f" %(param[0],param[1], param[2], param[3]), **kwargs)
+        ax.semilogy()
+        ax.set_ylim(1,1.2*np.max(hist))
         ax.legend(fontsize=16)
         if savefig:
             fig.savefig(savefig)
@@ -331,6 +333,15 @@ def efficiency_k_n(k,n):
     eff = np.where(np.logical_and(k>0,n>0), (k+1)/(n+2), 0)  
     var = np.where(np.logical_and(k>0,n>0), ((k+1)*(k+2)/((n+2)*(n+3)) - (k+1)**2/(n+2)**2 ), 0)
     return (eff, var**(1/2))
+
+
+def error_propation(time_difference, time_difference_error, MCP_resolution, MCP_resolution_error):
+    """
+    error propagation of delta_t^2 - MCP^2, which gives the time resolution of the DUT and its uncertainty
+    """
+    z = np.sqrt(time_difference**2 - MCP_resolution**2)
+    z_err = np.sqrt((time_difference**2 * time_difference_error**2 + MCP_resolution**2 * MCP_resolution_error**2) / z)
+    return z, z_err
 
 
 @timeout(20) ### max seconds of running
@@ -570,7 +581,7 @@ def geometry_mask(df, DUT_number, bins, bins_find_min='rice', only_select="norma
     return bool_geometry, {'left_edge':left_edge, 'right_edge':right_edge, 'bottom_edge':bottom_edge, 'top_edge':top_edge}
 
 
-def time_mask(df, DUT_number, bins=10000, mask=None, p0=None, sigmas=3, plot=False, savefig=False):
+def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None, sigmas=3, plot=False, savefig=False):
     """
     Creates a boolean mask using a gaussian+background fit of the time difference between DUT and MCP.
     The fit is done in the time window -20e3 :_: 20e3
@@ -580,6 +591,7 @@ def time_mask(df, DUT_number, bins=10000, mask=None, p0=None, sigmas=3, plot=Fal
     df:         dataframe containing the 'timeCFD50_0' and 'timeCFD20_dut'
     DUT_number: number of the selected dut for the time_mask filter
     bins:       binning options for the time difference
+    n_bootstrap:  integer or False, iterations to repeat bootstrap resampling
     [REMOVED]  CFD_MCP:    constant fraction discriminator for the MCP, possibles are: 20,50,70 (percentage)
     mask:       boolean array (only one array) to filter events where 'mask' is True (i.e. df['Xtr'].loc[mask[DUT]])
     p0:         initial parameters for the gaussian fit (A, mu, sigma, background)
@@ -603,12 +615,28 @@ def time_mask(df, DUT_number, bins=10000, mask=None, p0=None, sigmas=3, plot=Fal
         boolean_mask = np.logical_and(window_fit, mask)
     else:
         boolean_mask = window_fit
-    if plot:    hist,my_bins,_,fig,ax = plot_histogram((df[f"timeCFD20_{dut}"].loc[boolean_mask]-df["timeCFD50_0"].loc[boolean_mask]), bins=bins)
-    else:       hist,my_bins = np.histogram((df[f"timeCFD20_{dut}"].loc[boolean_mask]-df["timeCFD50_0"].loc[boolean_mask]), bins=bins)
+    if plot:    hist,my_bins,_,fig,ax = plot_histogram((df[f"timeCFD20_{dut}"].loc[boolean_mask]-df["timeCFD50_0"].loc[boolean_mask]), bins=bins, density=True)
+    else:       hist,my_bins = np.histogram((df[f"timeCFD20_{dut}"].loc[boolean_mask]-df["timeCFD50_0"].loc[boolean_mask]), bins=bins, density=True)
     bins_centers = (my_bins[:-1]+my_bins[1:])/2
     if p0 is None: p0 = (np.max(hist), bins_centers[np.argmax(hist)], 100, np.average(hist))
     try:
-        param, covar = curve_fit(my_gauss, bins_centers, hist, p0=p0)
+        if n_bootstrap:
+            logging.info(f"Bootstrap for time resolution error with {n_bootstrap} iterations")
+            param_list = np.zeros(shape=(n_bootstrap, len(p0)))
+            covar_list = np.zeros(shape=(n_bootstrap, len(p0), len(p0)))
+            for i in range(n_bootstrap):
+                resampled_hist = np.random.choice(bins_centers, size=len((df[f"timeCFD20_{dut}"].loc[boolean_mask]-df["timeCFD50_0"].loc[boolean_mask])), p=hist/np.sum(hist))
+                hist_sample, _ = np.histogram(resampled_hist, bins=my_bins, density=True)
+                p0 = (np.max(hist_sample), bins_centers[np.argmax(hist_sample)], 100, np.average(hist_sample))
+                param, covar = curve_fit(my_gauss, bins_centers, hist_sample, p0=p0)#, sigma=hist**0.5, absolute_sigma=True)
+                param_list[i] = param
+            param = param_list.mean(axis=0)
+            param_error = param_list.std(axis=0)
+            covar = covar_list.mean(axis=0)
+            covar_error = covar_list.std(axis=0)
+        else:
+            param, covar = curve_fit(my_gauss, bins_centers, hist, p0=p0)
+            param_error, covar_error = 0, 0
     except:
         logging.error("in 'time_mask(): some error occurred while fitting, no time mask")
         return pd.Series(True, index=df.index), None
@@ -625,7 +653,8 @@ def time_mask(df, DUT_number, bins=10000, mask=None, p0=None, sigmas=3, plot=Fal
         ax.legend(fontsize=14)
         if savefig:
             fig.savefig(savefig)
-    return time_cut, {'parameters':param, 'covariance':covar,'chi2_reduced':chi2_reduced, 'left_base':left_base, 'right_base':right_base} # info 
+    return time_cut, {'parameters':param, 'parameters_errors':param_error, 'covariance':covar, 'covariance_errors':covar_error,
+                      'chi2_reduced':chi2_reduced, 'left_base':left_base, 'right_base':right_base} # info 
     
 
 ### I want to add time_bins (now 5000)
