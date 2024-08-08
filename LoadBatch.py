@@ -581,7 +581,7 @@ def geometry_mask(df, DUT_number, bins, bins_find_min='rice', only_select="norma
     return bool_geometry, {'left_edge':left_edge, 'right_edge':right_edge, 'bottom_edge':bottom_edge, 'top_edge':top_edge}
 
 
-def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None, sigmas=3, plot=False, savefig=False):
+def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None, sigmas=3, plot=False, savefig=False, title_info=''):
     """
     Creates a boolean mask using a gaussian+background fit of the time difference between DUT and MCP.
     The fit is done in the time window -20e3 :_: 20e3
@@ -597,7 +597,8 @@ def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None,
     p0:         initial parameters for the gaussian fit (A, mu, sigma, background)
     sigmas:     number of sigmas from the center to include in the time cut window
     plot:       boolean, if False: np.histogram is called instead, so that no plot is shown
-    savefig:   boolean, if not False: the fig is saved at the path 'savefig' (include file name please)
+    savefig:    boolean, if not False: the fig is saved at the path 'savefig' (include file name please)
+    title_info: additional info to put in the title (e.g. batch number)
     Returns
     -------
     time_cut:   boolean mask of the events within the calculated time frame 
@@ -650,6 +651,7 @@ def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None,
         ax.set_xlim(param[1]-50*np.abs(param[2]), param[1]+50*np.abs(param[2]))
         ax.plot(bins_centers, my_gauss(bins_centers,*param), color='k', label="A: %.0f, $\mu$: %.0f, $\sigma$: %.1f, BG: %.1f" %(param[0],param[1], param[2], param[3]))
         ax.plot([],[], linewidth=0, label="$\chi^2$ reduced: "+f"%.1f"%chi2_reduced)
+        ax.set_title("$Delta$t gaussian fit"+title_info, fontsize=16)
         ax.legend(fontsize=14)
         if savefig:
             fig.savefig(savefig)
