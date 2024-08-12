@@ -38,9 +38,12 @@ def get_DUTs_from_dictionary(dictionary, oscilloscope):
             DUTs.append(i+1)
     return DUTs
 
-def my_gauss(x, A, mu, sigma, background):
+def my_gauss(x, A, mu, sigma, background=0):
 
-    """Custom normal distribution function + uniform background"""
+    """
+    Custom normal distribution function + uniform background.
+    default value of background is zero, so if 
+    """
     return A * np.exp(-0.5*(x-mu)**2/sigma**2) + background
 
 
@@ -214,7 +217,7 @@ def plot_histogram(data, bins='auto', poisson_err=False, error_band=False, fig_a
                     filled_band_parameters = {'alpha':0.5, 'linestyle':'--'}
                     errorbar_parameters.update({'elinewidth':0,'capsize':0,'errorevery':1})     ### defaults specific to 
                     ax.fill_between(bins_centers, single_hist-y_error, single_hist+y_error, **filled_band_parameters)#, label=f"{label} error")
-                ax.errorbar(bins_centers, single_hist, yerr=single_hist**0.5, **errorbar_parameters)
+                ax.errorbar(bins_centers, single_hist, yerr=y_error, **errorbar_parameters)
         else:
             y_error = hist**0.5
             if error_band:      ### I just mask all the errorbars
@@ -335,7 +338,7 @@ def efficiency_k_n(k,n):
     return (eff, var**(1/2))
 
 
-def error_propation(time_difference, time_difference_error, MCP_resolution, MCP_resolution_error):
+def error_propagation(time_difference, time_difference_error, MCP_resolution, MCP_resolution_error):
     """
     error propagation of delta_t^2 - MCP^2, which gives the time resolution of the DUT and its uncertainty
     """
@@ -616,20 +619,23 @@ def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None,
         boolean_mask = np.logical_and(window_fit, mask)
     else:
         boolean_mask = window_fit
-    if plot:    hist,my_bins,_,fig,ax = plot_histogram((df[f"timeCFD20_{dut}"].loc[boolean_mask]-df["timeCFD50_0"].loc[boolean_mask]), bins=bins, density=True)
-    else:       hist,my_bins = np.histogram((df[f"timeCFD20_{dut}"].loc[boolean_mask]-df["timeCFD50_0"].loc[boolean_mask]), bins=bins, density=True)
+    time_data = df[f"timeCFD20_{dut}"].loc[boolean_mask]-df["timeCFD50_0"].loc[boolean_mask]
+    if plot:    hist,my_bins,_,fig,ax = plot_histogram((time_data), bins=bins, poisson_err=True)
+    else:       hist,my_bins = np.histogram((time_data), bins=bins, density=False)
     bins_centers = (my_bins[:-1]+my_bins[1:])/2
     if p0 is None: p0 = (np.max(hist), bins_centers[np.argmax(hist)], 100, np.average(hist))
     try:
+        hist_error = (hist+1)**.5      ### relative (poissonian) error
+        density_factor = sum(hist*np.diff(my_bins))      ### to rescale the histogram after 
         if n_bootstrap:
             logging.info(f"Bootstrap for time resolution error with {n_bootstrap} iterations")
             param_list = np.zeros(shape=(n_bootstrap, len(p0)))
             covar_list = np.zeros(shape=(n_bootstrap, len(p0), len(p0)))
             for i in range(n_bootstrap):
-                resampled_hist = np.random.choice(bins_centers, size=len((df[f"timeCFD20_{dut}"].loc[boolean_mask]-df["timeCFD50_0"].loc[boolean_mask])), p=hist/np.sum(hist))
+                resampled_hist = np.random.choice(bins_centers, size=len(time_data), p=hist/np.sum(hist))
                 hist_sample, _ = np.histogram(resampled_hist, bins=my_bins, density=True)
                 p0 = (np.max(hist_sample), bins_centers[np.argmax(hist_sample)], 100, np.average(hist_sample))
-                param, covar = curve_fit(my_gauss, bins_centers, hist_sample, p0=p0)#, sigma=hist**0.5, absolute_sigma=True)
+                param, covar = curve_fit(my_gauss, bins_centers, hist_sample, p0=p0, sigma=hist_error/density_factor, absolute_sigma=True)
                 param_list[i] = param
             param = param_list.mean(axis=0)
             param_error = param_list.std(axis=0)
@@ -638,19 +644,22 @@ def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None,
         else:
             param, covar = curve_fit(my_gauss, bins_centers, hist, p0=p0)
             param_error, covar_error = 0, 0
+            density_factor = 1
     except:
         logging.error("in 'time_mask(): some error occurred while fitting, no time mask")
         return pd.Series(True, index=df.index), None
     logging.info(f"in 'time_mask()': Fit parameters {param}")
-    chi2_reduced = sum((hist-my_gauss(bins_centers,*param))**2/my_gauss(bins_centers,*param))/(len(hist)-len(param))
+    # chi2_reduced = sum((hist-my_gauss(bins_centers,*param))**2/my_gauss(bins_centers,*param))/(len(hist)-len(param))
+                ###      (  Y_n - f(X_n)  )**2          /    sigma_n=(f_k**.5 / (N*bin_size)**.5 )     /  (d.o.f)                       
+    chi2_reduced = sum((hist - density_factor*my_gauss(bins_centers,*param))**2 / (hist_error)) / (len(hist)-len(param))
     left_base, right_base = param[1]-sigmas*np.abs(param[2]), param[1]+sigmas*np.abs(param[2])
     left_cut = (df[f"timeCFD20_{dut}"]-df[f"timeCFD50_0"])>left_base
     right_cut = (df[f"timeCFD20_{dut}"]-df[f"timeCFD50_0"])<right_base
     time_cut = np.logical_and(left_cut, right_cut)
     if plot:
         ax.set_xlim(param[1]-50*np.abs(param[2]), param[1]+50*np.abs(param[2]))
-        ax.plot(bins_centers, my_gauss(bins_centers,*param), color='k', label="A: %.0f, $\mu$: %.0f, $\sigma$: %.1f, BG: %.1f" %(param[0],param[1], param[2], param[3]))
-        ax.plot([],[], linewidth=0, label="$\chi^2$ reduced: "+f"%.1f"%chi2_reduced)
+        ax.plot(bins_centers, density_factor*my_gauss(bins_centers,*param), color='k', label="A: %.0f, $\mu$: %.0f, $\sigma$: %.1f, BG: %.1f" %(param[0],param[1], param[2], param[3]))
+        ax.plot([],[], linewidth=0, label="$\chi^2$ reduced: "+f"%.3f"%chi2_reduced)
         ax.set_title("$Delta$t gaussian fit"+title_info, fontsize=16)
         ax.legend(fontsize=14)
         if savefig:
@@ -1018,12 +1027,9 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 ax.plot([],[],linewidth=0, label="$\mu$: %.1f $\pm$ %.1f"%(param[1],covar[1,1]**0.5))
                 ax.plot([],[],linewidth=0, label="$\sigma$: %.2f $\pm$ %.2f"%(param[2],covar[2,2]**0.5))
                 ax.plot([],[],linewidth=0, label="BG: %.1f $\pm$ %.1f"%(param[3],covar[3,3]**0.5))
-                chi2_reduced = sum((hist-my_gauss(bins_centers,*param))**2/my_gauss(bins_centers,*param))/(len(hist)-len(param))
+                # chi2_reduced = sum((hist-my_gauss(bins_centers,*param))**2/my_gauss(bins_centers,*param))/(len(hist)-len(param))
+                chi2_reduced = sum((hist-my_gauss(bins_centers,*param))**2/(hist**.5+1))/(len(hist)-len(param))
                 ax.plot([],[],linewidth=0, label="$\chi^2$ reduced: "+f"%.1f"%chi2_reduced)
-                ### skewness doesn't work, idk why
-            #     skewness = skew((df[f"timeCFD{CFD_DUT}_{dut}"].loc[dut_cut]-df[f"timeCFD{CFD_MCP}_0"].loc[dut_cut]))
-            #     ax.plot([],[],linewidth=0, label="skewness: %.1f" %skewness[1])
-
             #     ax.plot([],[],linewidth=0, label=f"(MCP: CFD{CFD_MCP}%, DUT: CFD{CFD_DUT}%)")
                 plot_title = f"MCP: CFD{CFD_MCP}%, DUT: CFD{CFD_DUT}%"
                 ax.set_title(plot_title, fontsize=16)
