@@ -629,6 +629,7 @@ def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None,
         density_factor = sum(hist*np.diff(my_bins))      ### to rescale the histogram after 
         if n_bootstrap:
             logging.info(f"Bootstrap for time resolution error with {n_bootstrap} iterations")
+            title_info = f" w/ bootstrap (n={n_bootstrap})" + title_info  ### add "w/ bootstrap" to the title
             param_list = np.zeros(shape=(n_bootstrap, len(p0)))
             covar_list = np.zeros(shape=(n_bootstrap, len(p0), len(p0)))
             for i in range(n_bootstrap):
@@ -657,10 +658,13 @@ def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None,
     right_cut = (df[f"timeCFD20_{dut}"]-df[f"timeCFD50_0"])<right_base
     time_cut = np.logical_and(left_cut, right_cut)
     if plot:
-        ax.set_xlim(param[1]-50*np.abs(param[2]), param[1]+50*np.abs(param[2]))
-        ax.plot(bins_centers, density_factor*my_gauss(bins_centers,*param), color='k', label="A: %.0f, $\mu$: %.0f, $\sigma$: %.1f, BG: %.1f" %(param[0],param[1], param[2], param[3]))
-        ax.plot([],[], linewidth=0, label="$\chi^2$ reduced: "+f"%.3f"%chi2_reduced)
-        ax.set_title("$Delta$t gaussian fit"+title_info, fontsize=16)
+        ax.set_xlim(param[1]-20*np.abs(param[2]), param[1]+30*np.abs(param[2])) ### sligthly asymmetric to fit the legend better
+        ax.set_xlabel(f"$\Delta t$ [ps] (DUT - MCP)", fontsize=14)
+        ax.set_ylabel("Events", fontsize=14)
+        ax.plot(bins_centers, density_factor*my_gauss(bins_centers,*param), color='k', label=f"A: {density_factor*param[0]:.1f}, $\mu$: {param[1]:.1f}, BG:  {density_factor*param[3]:.1f}")
+        ax.plot([],[], linewidth=0, label=f"$\sigma$: {param[2]:.2f} $\pm$ {param_error[2]:.2f} ps")
+        ax.plot([],[], linewidth=0, label="$\chi^2_{reduced}$: "+f" {chi2_reduced:.3f}")
+        ax.set_title("$\Delta$t gaussian fit"+title_info, fontsize=16)
         ax.legend(fontsize=14)
         if savefig:
             fig.savefig(savefig)
