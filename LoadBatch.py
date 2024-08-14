@@ -342,6 +342,8 @@ def error_propagation(time_difference, time_difference_error, MCP_resolution, MC
     """
     error propagation of delta_t^2 - MCP^2, which gives the time resolution of the DUT and its uncertainty
     """
+    if time_difference**2 < MCP_resolution**2:
+        logging.error("Invalid values of either $\Delta$t or MCP resolution: {time_difference} and {MCP_resolution}")
     z = np.sqrt(time_difference**2 - MCP_resolution**2)
     z_err = np.sqrt((time_difference**2 * time_difference_error**2 + MCP_resolution**2 * MCP_resolution_error**2) / z)
     return z, z_err
@@ -606,10 +608,13 @@ def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None,
     -------
     time_cut:   boolean mask of the events within the calculated time frame 
     info:       dictionary containing other useful information about the time cut:
-                    'parameters':   parameters of the gaussian fit
-                    'covariance':   covariance   "   "   "   "
-                    'left_base':    value of the left edge of the cut
-                    'right_base':   value of the right edge of the cut
+                    'parameters':       parameters of the gaussian fit 
+                    'parameters_errors':  and its uncertainty from bootstrap method (zero if no bootstrap) 
+                    'covariance':       covariance   "   "   "   "
+                    'covariance_errors':   and its uncertainty from bootstrap method (zero if no bootstrap)
+                    'chi2_reduced':     reduced chi squared: chi^2/d.o.f.
+                    'left_base':        value of the left edge of the cut
+                    'right_base':       value of the right edge of the cut
     """
     dut = DUT_number
     window_limit = 20e3 #ps     ### -window_limit < delta t < +window_limit
@@ -969,27 +974,29 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             cb = fig.colorbar(im, ax=axes.ravel().tolist(), fraction=0.1/len(n_DUT), pad=0.2)
             cb.set_label(label="Efficiency (%)", fontsize=16)
             if title_position is None: title_position = 1.2
-            # savefig_details += f'(geometry cut using {use})'
-
-
-# (df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice', n_DUT=None, efficiency_lim=None, extra_info=True, info=True, geometry_cut="normal", mask=None, threshold_charge=4, transimpedance=None, use='pulseheight', zoom_to_sensor=False,
-#         fig_ax=None, savefig=False, savefig_path='../various plots', savefig_details='', fmt='svg',
-#         **kwrd_arg):
- 
+            # savefig_details += f'(geometry cut using {use})' 
 
         case "CFD_comparison":
-            # if fig_ax:  fig, axes = fig_ax
-            # else:       fig, axes = plt.subplots(nrows=1, ncols=len(n_DUT), figsize=(6*len(n_DUT),6), sharex=False, sharey=False, dpi=200)
             if bins is None: bins = (200,200)       ### default binning
-
-            colormap = ['k','b','g','r']
             if CFD_values is None: CFD_values = (20,50,70)
             axes_size = len(CFD_values)
-            # if n_DUT is None: n_DUT = (1,2,3)  ### maybe it's just better to do it one dut at a time
+
+            colormap = ['k','b','g','r']
             window_limit = 20e3
             xlim = (-7e3,-4.5e3)
-            MCP_resolution = 36.52
-            time_bins = 5000
+            time_bins = 5000   ### maybe should be an argument of plot
+            MCP_voltage = batch_object.S[this_scope].get_sensor('Ch1').voltage
+            match MCP_voltage:  ### last MCP_voltage entry
+                case 2500: 
+                    MCP_resolution = 36.52 # +/- 0.81
+                    MCP_error = 0.81
+                case 2600: 
+                    MCP_resolution = 16.48 # +/- 0.57
+                    MCP_error = 0.57
+                case 2800: 
+                    MCP_resolution = 3.73  # +/- 1.33
+                    MCP_error = 1.33
+                case other: logging.error("Incorrect MCP voltage")
 
             dut = n_DUT
             fig, axes = plt.subplots(figsize=(6*axes_size,4*axes_size), nrows=axes_size, ncols=axes_size, dpi=300)
@@ -1009,38 +1016,35 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                                         (df[f"timeCFD{CFD_DUT}_{dut}"]-df[f"timeCFD{CFD_MCP}_0"])< +window_limit)
                 dut_cut = np.logical_and(window_fit, dut_cut)
 
-                # dut_cut = np.logical_and(window_fit, np.logical_and(pulse_cuts[dut-1],geo_cuts[dut-1]))
-                ### ONLY EVENTS WITH CHARGE OVER THE THRESHOLD CHARGE
-
-                ### maybe this should be the 'mask'
-                # dut_cut = np.logical_and(charge_cut[dut-1],
-                #                         np.logical_and(window_fit, np.logical_and(pulseheight_cut[dut-1],geo_cuts[dut-1])))
-
                 hist, my_bins,_,_,_ = plot_histogram((df[f"timeCFD{CFD_DUT}_{dut}"].loc[dut_cut]-df[f"timeCFD{CFD_MCP}_0"].loc[dut_cut]),
                                                     bins=time_bins, color='k', linewidth=1, alpha=1,
                                                     fig_ax=(fig,ax))
 
+                time_dict = time_mask(df, dut, bins=time_bins, n_bootstrap=50, plot=False, mask=dut_cut)[1]
                 bins_centers = (my_bins[:-1]+my_bins[1:])/2
-                initial_param = (np.max(hist),bins_centers[np.argmax(hist)],100,np.average(hist))
-                param, covar = curve_fit(my_gauss, bins_centers, hist, p0=initial_param)#, sigma=hist**0.5, absolute_sigma=True)
+                
+                # initial_param = (np.max(hist),bins_centers[np.argmax(hist)],100,np.average(hist))
+                # param, covar = curve_fit(my_gauss, bins_centers, hist, p0=initial_param, sigma=(hist**0.5+1), absolute_sigma=True)
                 #     print(f"Fit parameters: {param}"
-                ax.plot(bins_centers, my_gauss(bins_centers,*param), color=colormap[dut])
 
-                ### add units to the parameters
+                param, param_err = time_dict['parameters'], time_dict['parameters_errors']
+                ax.plot(bins_centers, my_gauss(bins_centers,*param), color=colormap[dut])
+### add units to the parameters
                 ax.plot([],[],linewidth=0, label="A: %.0f" %param[0]) # only two decimals
-                ax.plot([],[],linewidth=0, label="$\mu$: %.1f $\pm$ %.1f"%(param[1],covar[1,1]**0.5))
-                ax.plot([],[],linewidth=0, label="$\sigma$: %.2f $\pm$ %.2f"%(param[2],covar[2,2]**0.5))
-                ax.plot([],[],linewidth=0, label="BG: %.1f $\pm$ %.1f"%(param[3],covar[3,3]**0.5))
-                # chi2_reduced = sum((hist-my_gauss(bins_centers,*param))**2/my_gauss(bins_centers,*param))/(len(hist)-len(param))
-                chi2_reduced = sum((hist-my_gauss(bins_centers,*param))**2/(hist**.5+1))/(len(hist)-len(param))
-                ax.plot([],[],linewidth=0, label="$\chi^2$ reduced: "+f"%.1f"%chi2_reduced)
-            #     ax.plot([],[],linewidth=0, label=f"(MCP: CFD{CFD_MCP}%, DUT: CFD{CFD_DUT}%)")
+                ax.plot([],[],linewidth=0, label="$\mu$: %.1f $\pm$ %.1f"%(param[1],param_err[1]**0.5))
+                ax.plot([],[],linewidth=0, label="$\sigma$: %.2f $\pm$ %.2f"%(param[2],param_err[2]**0.5))
+                ax.plot([],[],linewidth=0, label="BG: %.1f $\pm$ %.1f"%(param[3],param_err[3]**0.5))
+                # chi2_reduced = sum((hist-my_gauss(bins_centers,*param))**2/(hist**.5+1))/(len(hist)-len(param))
+                ax.plot([],[],linewidth=0, label="$\chi^2$ reduced: "+f"%.1f"%time_dict['chi2_reduced'])
+
                 plot_title = f"MCP: CFD{CFD_MCP}%, DUT: CFD{CFD_DUT}%"
                 ax.set_title(plot_title, fontsize=16)
                 ax.set_xlabel(f"$\Delta t$ [ps]", fontsize=16)
                 ax.set_ylabel("Events", fontsize=16)
-                time_resolution_table.append(np.sqrt(param[2]**2-MCP_resolution**2))
-                chi2_table.append(chi2_reduced)
+                time_resolution_table.append(error_propagation(param[2], param_err[2],
+                                                            MCP_resolution, MCP_error))
+                # time_resolution_table.append(np.sqrt(param[2]**2-MCP_resolution**2))
+                chi2_table.append(time_dict['chi2_reduced'])
 
                 ax.set_xlim(xlim)
                 ax.legend(fontsize=16, framealpha=0, markerscale=0)
