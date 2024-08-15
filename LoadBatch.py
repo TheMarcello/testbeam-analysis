@@ -343,7 +343,7 @@ def error_propagation(time_difference, time_difference_error, MCP_resolution, MC
     error propagation of delta_t^2 - MCP^2, which gives the time resolution of the DUT and its uncertainty
     """
     if time_difference**2 < MCP_resolution**2:
-        logging.error("Invalid values of either $\Delta$t or MCP resolution: {time_difference} and {MCP_resolution}")
+        logging.error(f"Invalid values of either Deltat or MCP resolution: {time_difference} and {MCP_resolution}")
     z = np.sqrt(time_difference**2 - MCP_resolution**2)
     z_err = np.sqrt((time_difference**2 * time_difference_error**2 + MCP_resolution**2 * MCP_resolution_error**2) / z)
     return z, z_err
@@ -586,7 +586,7 @@ def geometry_mask(df, DUT_number, bins, bins_find_min='rice', only_select="norma
     return bool_geometry, {'left_edge':left_edge, 'right_edge':right_edge, 'bottom_edge':bottom_edge, 'top_edge':top_edge}
 
 
-def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None, sigmas=3, plot=False, savefig=False, title_info=''):
+def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None, sigmas=3, CFD_DUT=20, CFD_MCP=50, plot=False, savefig=False, title_info='', fig_ax=None):
     """
     Creates a boolean mask using a gaussian+background fit of the time difference between DUT and MCP.
     The fit is done in the time window -20e3 :_: 20e3
@@ -597,7 +597,8 @@ def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None,
     DUT_number: number of the selected dut for the time_mask filter
     bins:       binning options for the time difference
     n_bootstrap:  integer or False, iterations to repeat bootstrap resampling
-    [REMOVED]  CFD_MCP:    constant fraction discriminator for the MCP, possibles are: 20,50,70 (percentage)
+    CFD_DUT:    constant fraction discriminator for the DUT, possibles are: 20,50,70 (percentage), default=20 # reintroduced
+    CFD_MCP:    constant fraction discriminator for the MCP, possibles are: 20,50,70 (percentage), dafault=50
     mask:       boolean array (only one array) to filter events where 'mask' is True (i.e. df['Xtr'].loc[mask[DUT]])
     p0:         initial parameters for the gaussian fit (A, mu, sigma, background)
     sigmas:     number of sigmas from the center to include in the time cut window
@@ -618,14 +619,16 @@ def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None,
     """
     dut = DUT_number
     window_limit = 20e3 #ps     ### -window_limit < delta t < +window_limit
-    window_fit = np.logical_and((df[f"timeCFD20_{dut}"]-df["timeCFD50_0"]) > -window_limit,
-                                (df[f"timeCFD20_{dut}"]-df["timeCFD50_0"]) < +window_limit)
+    window_fit = np.logical_and((df[f"time{CFD_DUT}_{dut}"]-df[f"time{CFD_MCP}_0"]) > -window_limit,
+                                (df[f"time{CFD_DUT}_{dut}"]-df[f"time{CFD_MCP}_0"]) < +window_limit)
     if mask is not None:
         boolean_mask = np.logical_and(window_fit, mask)
     else:
         boolean_mask = window_fit
-    time_data = df[f"timeCFD20_{dut}"].loc[boolean_mask]-df["timeCFD50_0"].loc[boolean_mask]
-    if plot:    hist,my_bins,_,fig,ax = plot_histogram((time_data), bins=bins, poisson_err=True)
+    time_data = df[f"time{CFD_DUT}_{dut}"].loc[boolean_mask]-df[f"time{CFD_MCP}_0"].loc[boolean_mask]
+    if plot:
+        if fig_ax:  hist,my_bins,_,fig,ax = plot_histogram((time_data), bins=bins, poisson_err=True, fig_ax=fig_ax)
+        else:       hist,my_bins,_,fig,ax = plot_histogram((time_data), bins=bins, poisson_err=True)
     else:       hist,my_bins = np.histogram((time_data), bins=bins, density=False)
     bins_centers = (my_bins[:-1]+my_bins[1:])/2
     if p0 is None: p0 = (np.max(hist), bins_centers[np.argmax(hist)], 100, np.average(hist))
@@ -633,7 +636,7 @@ def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None,
         hist_error = (hist+1)**.5      ### relative (poissonian) error
         density_factor = sum(hist*np.diff(my_bins))      ### to rescale the histogram after 
         if n_bootstrap:
-            logging.info(f"Bootstrap for time resolution error with {n_bootstrap} iterations")
+            logging.info(f"Starting bootstrap for time resolution error with {n_bootstrap} iterations")
             title_info = f" w/ bootstrap (n={n_bootstrap})" + title_info  ### add "w/ bootstrap" to the title
             param_list = np.zeros(shape=(n_bootstrap, len(p0)))
             covar_list = np.zeros(shape=(n_bootstrap, len(p0), len(p0)))
@@ -641,7 +644,8 @@ def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None,
                 resampled_hist = np.random.choice(bins_centers, size=len(time_data), p=hist/np.sum(hist))
                 hist_sample, _ = np.histogram(resampled_hist, bins=my_bins, density=True)
                 p0 = (np.max(hist_sample), bins_centers[np.argmax(hist_sample)], 100, np.average(hist_sample))
-                param, covar = curve_fit(my_gauss, bins_centers, hist_sample, p0=p0, sigma=hist_error/density_factor, absolute_sigma=True)
+                param, covar = curve_fit(my_gauss, bins_centers, hist_sample, p0=p0, sigma=hist_error/density_factor, absolute_sigma=True, 
+                                         bounds=((0,-np.inf,0,0),(np.inf,np.inf,np.inf,np.inf)), nan_policy='omit')
                 param_list[i] = param
             param = param_list.mean(axis=0)
             param_error = param_list.std(axis=0)
@@ -659,8 +663,8 @@ def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None,
                 ###      (  Y_n - f(X_n)  )**2          /    sigma_n=(f_k**.5 / (N*bin_size)**.5 )     /  (d.o.f)                       
     chi2_reduced = sum((hist - density_factor*my_gauss(bins_centers,*param))**2 / (hist_error)) / (len(hist)-len(param))
     left_base, right_base = param[1]-sigmas*np.abs(param[2]), param[1]+sigmas*np.abs(param[2])
-    left_cut = (df[f"timeCFD20_{dut}"]-df[f"timeCFD50_0"])>left_base
-    right_cut = (df[f"timeCFD20_{dut}"]-df[f"timeCFD50_0"])<right_base
+    left_cut =  (df[f"time{CFD_DUT}_{dut}"]-df[f"time{CFD_MCP}_0"])>left_base
+    right_cut = (df[f"time{CFD_DUT}_{dut}"]-df[f"time{CFD_MCP}_0"])<right_base
     time_cut = np.logical_and(left_cut, right_cut)
     if plot:
         ax.set_xlim(param[1]-20*np.abs(param[2]), param[1]+30*np.abs(param[2])) ### sligthly asymmetric to fit the legend better
@@ -678,7 +682,7 @@ def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None,
     
 
 ### I want to add time_bins (now 5000)
-def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice', n_DUT=None, CFD_values=None, efficiency_lim=None, extra_info=True, info=True, 
+def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice', time_bins=5000, n_DUT=None, CFD_values=None, efficiency_lim=None, extra_info=True, info=True, 
         geometry_cut="normal", mask=None, threshold_charge=4, transimpedance=None, use='pulseheight', zoom_to_sensor=False, 
         fig_ax=None, savefig=False, savefig_path='../various plots', savefig_details='', fmt='svg', title_position=None,
         **kwrd_arg):
@@ -984,7 +988,6 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             colormap = ['k','b','g','r']
             window_limit = 20e3
             xlim = (-7e3,-4.5e3)
-            time_bins = 5000   ### maybe should be an argument of plot
             MCP_voltage = batch_object.S[this_scope].get_sensor('Ch1').voltage
             match MCP_voltage:  ### last MCP_voltage entry
                 case 2500: 
@@ -1016,41 +1019,41 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                                         (df[f"timeCFD{CFD_DUT}_{dut}"]-df[f"timeCFD{CFD_MCP}_0"])< +window_limit)
                 dut_cut = np.logical_and(window_fit, dut_cut)
 
-                hist, my_bins,_,_,_ = plot_histogram((df[f"timeCFD{CFD_DUT}_{dut}"].loc[dut_cut]-df[f"timeCFD{CFD_MCP}_0"].loc[dut_cut]),
-                                                    bins=time_bins, color='k', linewidth=1, alpha=1,
-                                                    fig_ax=(fig,ax))
+                # hist, my_bins,_,_,_ = plot_histogram((df[f"timeCFD{CFD_DUT}_{dut}"].loc[dut_cut]-df[f"timeCFD{CFD_MCP}_0"].loc[dut_cut]),
+                #                                     bins=time_bins, color='k', linewidth=1, alpha=1,
+                #                                     fig_ax=(fig,ax))
 
-                time_dict = time_mask(df, dut, bins=time_bins, n_bootstrap=50, plot=False, mask=dut_cut)[1]
-                bins_centers = (my_bins[:-1]+my_bins[1:])/2
+                time_dict = time_mask(df, dut, bins=time_bins, n_bootstrap=50, plot=True, mask=dut_cut, CFD_DUT=CFD_DUT, CFD_MCP=CFD_MCP, fig_ax=(fig,ax))[1]
                 
+                # bins_centers = (my_bins[:-1]+my_bins[1:])/2
                 # initial_param = (np.max(hist),bins_centers[np.argmax(hist)],100,np.average(hist))
                 # param, covar = curve_fit(my_gauss, bins_centers, hist, p0=initial_param, sigma=(hist**0.5+1), absolute_sigma=True)
                 #     print(f"Fit parameters: {param}"
 
                 param, param_err = time_dict['parameters'], time_dict['parameters_errors']
-                ax.plot(bins_centers, my_gauss(bins_centers,*param), color=colormap[dut])
-### add units to the parameters
-                ax.plot([],[],linewidth=0, label="A: %.0f" %param[0]) # only two decimals
-                ax.plot([],[],linewidth=0, label="$\mu$: %.1f $\pm$ %.1f"%(param[1],param_err[1]**0.5))
-                ax.plot([],[],linewidth=0, label="$\sigma$: %.2f $\pm$ %.2f"%(param[2],param_err[2]**0.5))
-                ax.plot([],[],linewidth=0, label="BG: %.1f $\pm$ %.1f"%(param[3],param_err[3]**0.5))
-                # chi2_reduced = sum((hist-my_gauss(bins_centers,*param))**2/(hist**.5+1))/(len(hist)-len(param))
-                ax.plot([],[],linewidth=0, label="$\chi^2$ reduced: "+f"%.1f"%time_dict['chi2_reduced'])
+#                 ax.plot(bins_centers, my_gauss(bins_centers,*param), color=colormap[dut])
+# ### add units to the parameters
+#                 ax.plot([],[],linewidth=0, label="A: %.0f" %param[0]) # only two decimals
+#                 ax.plot([],[],linewidth=0, label="$\mu$: %.1f $\pm$ %.1f"%(param[1],param_err[1]**0.5))
+#                 ax.plot([],[],linewidth=0, label="$\sigma$: %.2f $\pm$ %.2f"%(param[2],param_err[2]**0.5))
+#                 ax.plot([],[],linewidth=0, label="BG: %.1f $\pm$ %.1f"%(param[3],param_err[3]**0.5))
+#                 # chi2_reduced = sum((hist-my_gauss(bins_centers,*param))**2/(hist**.5+1))/(len(hist)-len(param))
+#                 ax.plot([],[],linewidth=0, label="$\chi^2$ reduced: "+f"%.1f"%time_dict['chi2_reduced'])
 
-                plot_title = f"MCP: CFD{CFD_MCP}%, DUT: CFD{CFD_DUT}%"
-                ax.set_title(plot_title, fontsize=16)
-                ax.set_xlabel(f"$\Delta t$ [ps]", fontsize=16)
-                ax.set_ylabel("Events", fontsize=16)
+#                 plot_title = f"MCP: CFD{CFD_MCP}%, DUT: CFD{CFD_DUT}%"
+#                 ax.set_title(plot_title, fontsize=16)
+#                 ax.set_xlabel(f"$\Delta t$ [ps]", fontsize=16)
+#                 ax.set_ylabel("Events", fontsize=16)
                 time_resolution_table.append(error_propagation(param[2], param_err[2],
                                                             MCP_resolution, MCP_error))
                 # time_resolution_table.append(np.sqrt(param[2]**2-MCP_resolution**2))
                 chi2_table.append(time_dict['chi2_reduced'])
 
                 ax.set_xlim(xlim)
-                ax.legend(fontsize=16, framealpha=0, markerscale=0)
+                # ax.legend(fontsize=16, framealpha=0, markerscale=0)
 
             fig.tight_layout(w_pad=4, h_pad=4)
-            savefig_details += f'dut: {dut}'
+            savefig_details += f' dut: {dut}'
             if title_position is None: title_position = 1.1
 
             ### I should have each 'case' provide its own final figure title name
