@@ -617,15 +617,16 @@ def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None,
                     'left_base':        value of the left edge of the cut
                     'right_base':       value of the right edge of the cut
     """
+    colormap = ['k','b','g','r']
     dut = DUT_number
     window_limit = 20e3 #ps     ### -window_limit < delta t < +window_limit
-    window_fit = np.logical_and((df[f"time{CFD_DUT}_{dut}"]-df[f"time{CFD_MCP}_0"]) > -window_limit,
-                                (df[f"time{CFD_DUT}_{dut}"]-df[f"time{CFD_MCP}_0"]) < +window_limit)
+    window_fit = np.logical_and((df[f"timeCFD{CFD_DUT}_{dut}"]-df[f"timeCFD{CFD_MCP}_0"]) > -window_limit,
+                                (df[f"timeCFD{CFD_DUT}_{dut}"]-df[f"timeCFD{CFD_MCP}_0"]) < +window_limit)
     if mask is not None:
         boolean_mask = np.logical_and(window_fit, mask)
     else:
         boolean_mask = window_fit
-    time_data = df[f"time{CFD_DUT}_{dut}"].loc[boolean_mask]-df[f"time{CFD_MCP}_0"].loc[boolean_mask]
+    time_data = df[f"timeCFD{CFD_DUT}_{dut}"].loc[boolean_mask]-df[f"timeCFD{CFD_MCP}_0"].loc[boolean_mask]
     if plot:
         if fig_ax:  hist,my_bins,_,fig,ax = plot_histogram((time_data), bins=bins, poisson_err=True, fig_ax=fig_ax)
         else:       hist,my_bins,_,fig,ax = plot_histogram((time_data), bins=bins, poisson_err=True)
@@ -643,10 +644,12 @@ def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None,
             for i in range(n_bootstrap):
                 resampled_hist = np.random.choice(bins_centers, size=len(time_data), p=hist/np.sum(hist))
                 hist_sample, _ = np.histogram(resampled_hist, bins=my_bins, density=True)
-                p0 = (np.max(hist_sample), bins_centers[np.argmax(hist_sample)], 100, np.average(hist_sample))
-                param, covar = curve_fit(my_gauss, bins_centers, hist_sample, p0=p0, sigma=hist_error/density_factor, absolute_sigma=True, 
+                if i==0: p0 = (np.max(hist_sample), bins_centers[np.argmax(hist_sample)], 100, np.average(hist_sample))
+                ### actually including the error in the fit makes the fit worse (I guess because the 'zeros' have very small error(?) )
+                param, covar = curve_fit(my_gauss, bins_centers, hist_sample, p0=p0,# sigma=hist_error/density_factor, absolute_sigma=True, 
                                          bounds=((0,-np.inf,0,0),(np.inf,np.inf,np.inf,np.inf)), nan_policy='omit')
                 param_list[i] = param
+                p0 = param      ### trying to set p0 to the old parameters to make convergence faster (?)
             param = param_list.mean(axis=0)
             param_error = param_list.std(axis=0)
             covar = covar_list.mean(axis=0)
@@ -663,14 +666,14 @@ def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None,
                 ###      (  Y_n - f(X_n)  )**2          /    sigma_n=(f_k**.5 / (N*bin_size)**.5 )     /  (d.o.f)                       
     chi2_reduced = sum((hist - density_factor*my_gauss(bins_centers,*param))**2 / (hist_error)) / (len(hist)-len(param))
     left_base, right_base = param[1]-sigmas*np.abs(param[2]), param[1]+sigmas*np.abs(param[2])
-    left_cut =  (df[f"time{CFD_DUT}_{dut}"]-df[f"time{CFD_MCP}_0"])>left_base
-    right_cut = (df[f"time{CFD_DUT}_{dut}"]-df[f"time{CFD_MCP}_0"])<right_base
+    left_cut =  (df[f"timeCFD{CFD_DUT}_{dut}"]-df[f"timeCFD{CFD_MCP}_0"])>left_base
+    right_cut = (df[f"timeCFD{CFD_DUT}_{dut}"]-df[f"timeCFD{CFD_MCP}_0"])<right_base
     time_cut = np.logical_and(left_cut, right_cut)
     if plot:
         ax.set_xlim(param[1]-20*np.abs(param[2]), param[1]+30*np.abs(param[2])) ### sligthly asymmetric to fit the legend better
         ax.set_xlabel(f"$\Delta t$ [ps] (DUT - MCP)", fontsize=14)
         ax.set_ylabel("Events", fontsize=14)
-        ax.plot(bins_centers, density_factor*my_gauss(bins_centers,*param), color='k', label=f"A: {density_factor*param[0]:.1f}, $\mu$: {param[1]:.1f}, BG:  {density_factor*param[3]:.1f}")
+        ax.plot(bins_centers, density_factor*my_gauss(bins_centers,*param), color=colormap[dut], label=f"A: {density_factor*param[0]:.1f}, $\mu$: {param[1]:.1f}, BG:  {density_factor*param[3]:.1f}")
         ax.plot([],[], linewidth=0, label=f"$\sigma$: {param[2]:.2f} $\pm$ {param_error[2]:.2f} ps")
         ax.plot([],[], linewidth=0, label="$\chi^2_{reduced}$: "+f" {chi2_reduced:.3f}")
         ax.set_title("$\Delta$t gaussian fit"+title_info, fontsize=16)
@@ -985,7 +988,6 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             if CFD_values is None: CFD_values = (20,50,70)
             axes_size = len(CFD_values)
 
-            colormap = ['k','b','g','r']
             window_limit = 20e3
             xlim = (-7e3,-4.5e3)
             MCP_voltage = batch_object.S[this_scope].get_sensor('Ch1').voltage
@@ -1023,7 +1025,8 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 #                                     bins=time_bins, color='k', linewidth=1, alpha=1,
                 #                                     fig_ax=(fig,ax))
 
-                time_dict = time_mask(df, dut, bins=time_bins, n_bootstrap=50, plot=True, mask=dut_cut, CFD_DUT=CFD_DUT, CFD_MCP=CFD_MCP, fig_ax=(fig,ax))[1]
+                time_dict = time_mask(df, dut, bins=time_bins, n_bootstrap=50, plot=True, mask=dut_cut, CFD_DUT=CFD_DUT, CFD_MCP=CFD_MCP, 
+                                      title_info=f' CFD DUT:{CFD_DUT}% CFD MCP:{CFD_MCP}%', fig_ax=(fig,ax))[1]
                 
                 # bins_centers = (my_bins[:-1]+my_bins[1:])/2
                 # initial_param = (np.max(hist),bins_centers[np.argmax(hist)],100,np.average(hist))
@@ -1053,7 +1056,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 # ax.legend(fontsize=16, framealpha=0, markerscale=0)
 
             fig.tight_layout(w_pad=4, h_pad=4)
-            savefig_details += f' dut: {dut}'
+            savefig_details += f' {this_scope} dut: {dut}'
             if title_position is None: title_position = 1.1
 
             ### I should have each 'case' provide its own final figure title name
