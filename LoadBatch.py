@@ -658,8 +658,9 @@ def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None,
             covar = covar_list.mean(axis=0)
             covar_error = covar_list.std(axis=0)
         else:
-            param, covar = curve_fit(my_gauss, bins_centers, hist, p0=p0)
-            param_error, covar_error = 0, 0
+            param, covar = curve_fit(my_gauss, bins_centers, hist, p0=p0,
+                                     bounds=((0,-np.inf,0,0),(np.inf,np.inf,np.inf,np.inf)), nan_policy='omit')
+            param_error, covar_error = np.zeros_like(param), np.zeros_like(covar)
             density_factor = 1
     except:
         logging.error("in 'time_mask(): some error occurred while fitting, no time mask")
