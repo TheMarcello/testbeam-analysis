@@ -187,11 +187,14 @@ class Batch:
                 logging.error(f"Batch:{batch} does not have any board names assigned")
                 if S=="S1": boards = (none, none, none, none)
                 elif S=="S2":   boards =(none, none, none, none)
-                
-            scope.channels['Ch1'].board, scope.channels['Ch2'].board, \
+            
+            if scope is not None:
+                scope.channels['Ch1'].board, scope.channels['Ch2'].board, \
                             scope.channels['Ch3'].board, scope.channels['Ch4'].board = boards 
-            scope.channels['Ch1'].fluence, scope.channels['Ch2'].fluence, \
+                scope.channels['Ch1'].fluence, scope.channels['Ch2'].fluence, \
                             scope.channels['Ch3'].fluence, scope.channels['Ch4'].fluence = fluences 
+            else:
+                logging.error(f"No oscilloscope provided in initialization of {S} in batch {self.batch_number}, boards and fluence NOT set")
             
             
     def set_transimpedance(self): ### move it after set_fluence_boards() afterwards
@@ -202,12 +205,16 @@ class Batch:
         single_ch_transimpedance = 4700 #mV*ps/fC (I think)
         four_ch_transimpedance = 4700 ### actually this was wrong, they are all 4700
         for S,scope in self.S.items():
-            for ch, sensor in scope.channels.items():
-                if 'CERN' in sensor.board and 'CERN-4' not in sensor.board: ### boards CERN-1,CERN-2,CERN-3
-                    sensor.transimpedance = four_ch_transimpedance
-                elif sensor.board == NO_BOARD:                              ### no board name
-                    logging.info(f"in set_transimpedance(): No board name assigned: no transimpedance set")
-                elif sensor.board is not None and sensor.board != NO_BOARD: ### all the other options
-                    sensor.transimpedance = single_ch_transimpedance
-                else:                                                       ### probably board name is None
-                    logging.error("set_transimpedance(): Invalid board name")
+            if scope is not None:
+                for ch, sensor in scope.channels.items():
+                    if 'CERN' in sensor.board and 'CERN-4' not in sensor.board: ### boards CERN-1,CERN-2,CERN-3
+                        sensor.transimpedance = four_ch_transimpedance
+                    elif sensor.board == NO_BOARD:                              ### no board name
+                        logging.info(f"in set_transimpedance(): No board name assigned: no transimpedance set")
+                    elif sensor.board is not None and sensor.board != NO_BOARD: ### all the other options
+                        sensor.transimpedance = single_ch_transimpedance
+                    else:                                                       ### probably board name is None
+                        logging.error("set_transimpedance(): Invalid board name")
+            else:
+                logging.error(f"No oscilloscope provided in initialization of {S} in batch {self.batch_number}s, transimpedance NOT set")
+
