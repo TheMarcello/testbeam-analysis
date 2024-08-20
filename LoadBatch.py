@@ -33,9 +33,12 @@ def get_DUTs_from_dictionary(dictionary, oscilloscope):
     dictionary contains all the sensor.__dict__
     """
     DUTs = []
-    for i,ch in enumerate(('Ch2','Ch3','Ch4')):
-        if (dictionary[(oscilloscope,ch)]['board'] != 'no_board') and (dictionary[(oscilloscope,ch)]['voltage'] != 0):
-            DUTs.append(i+1)
+    if dictionary is not None:
+        for i,ch in enumerate(('Ch2','Ch3','Ch4')):
+            if (dictionary[(oscilloscope,ch)]['board'] != 'no_board') and (dictionary[(oscilloscope,ch)]['voltage'] != 0):
+                DUTs.append(i+1)
+    else:
+        logging.warning(f"Empty dictionary to extract DUTs from: NO DUTs")
     return DUTs
 
 def my_gauss(x, A, mu, sigma, background=0):
@@ -1021,39 +1024,17 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                                         (df[f"timeCFD{CFD_DUT}_{dut}"]-df[f"timeCFD{CFD_MCP}_0"])< +window_limit)
                 dut_cut = np.logical_and(window_fit, dut_cut)
 
-                # hist, my_bins,_,_,_ = plot_histogram((df[f"timeCFD{CFD_DUT}_{dut}"].loc[dut_cut]-df[f"timeCFD{CFD_MCP}_0"].loc[dut_cut]),
-                #                                     bins=time_bins, color='k', linewidth=1, alpha=1,
-                #                                     fig_ax=(fig,ax))
-
                 time_dict = time_mask(df, dut, bins=time_bins, n_bootstrap=50, plot=True, mask=dut_cut, CFD_DUT=CFD_DUT, CFD_MCP=CFD_MCP, 
-                                      title_info=f' CFD DUT:{CFD_DUT}% CFD MCP:{CFD_MCP}%', fig_ax=(fig,ax))[1]
-                
-                # bins_centers = (my_bins[:-1]+my_bins[1:])/2
-                # initial_param = (np.max(hist),bins_centers[np.argmax(hist)],100,np.average(hist))
-                # param, covar = curve_fit(my_gauss, bins_centers, hist, p0=initial_param, sigma=(hist**0.5+1), absolute_sigma=True)
-                #     print(f"Fit parameters: {param}"
+                                      title_info=f'\n CFD DUT:{CFD_DUT}% CFD MCP:{CFD_MCP}%', fig_ax=(fig,ax))[1]
 
                 param, param_err = time_dict['parameters'], time_dict['parameters_errors']
-#                 ax.plot(bins_centers, my_gauss(bins_centers,*param), color=colormap[dut])
-# ### add units to the parameters
-#                 ax.plot([],[],linewidth=0, label="A: %.0f" %param[0]) # only two decimals
-#                 ax.plot([],[],linewidth=0, label="$\mu$: %.1f $\pm$ %.1f"%(param[1],param_err[1]**0.5))
-#                 ax.plot([],[],linewidth=0, label="$\sigma$: %.2f $\pm$ %.2f"%(param[2],param_err[2]**0.5))
-#                 ax.plot([],[],linewidth=0, label="BG: %.1f $\pm$ %.1f"%(param[3],param_err[3]**0.5))
-#                 # chi2_reduced = sum((hist-my_gauss(bins_centers,*param))**2/(hist**.5+1))/(len(hist)-len(param))
-#                 ax.plot([],[],linewidth=0, label="$\chi^2$ reduced: "+f"%.1f"%time_dict['chi2_reduced'])
 
-#                 plot_title = f"MCP: CFD{CFD_MCP}%, DUT: CFD{CFD_DUT}%"
-#                 ax.set_title(plot_title, fontsize=16)
-#                 ax.set_xlabel(f"$\Delta t$ [ps]", fontsize=16)
-#                 ax.set_ylabel("Events", fontsize=16)
                 time_resolution_table.append(error_propagation(param[2], param_err[2],
                                                             MCP_resolution, MCP_error))
                 # time_resolution_table.append(np.sqrt(param[2]**2-MCP_resolution**2))
                 chi2_table.append(time_dict['chi2_reduced'])
 
                 ax.set_xlim(xlim)
-                # ax.legend(fontsize=16, framealpha=0, markerscale=0)
 
             fig.tight_layout(w_pad=4, h_pad=4)
             savefig_details += f' {this_scope} dut: {dut}'
