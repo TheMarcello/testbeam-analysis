@@ -26,6 +26,68 @@ from SensorClasses import *
 
 PIXEL_SIZE = 0.0184 #mm
 
+### binning options
+large_bins = (np.arange(0, 900,1),
+              np.arange(0, 600,1))
+
+bins1 = (np.arange(450, 700, 1),
+        np.arange(100, 500, 1))
+
+bins2 = (np.arange(350, 700, 1),
+              np.arange(100, 500, 1))
+
+bins3 = (np.arange(300, 800, 1),
+              np.arange(0, 450, 1))
+
+bins4 = (np.arange(500, 800, 1),
+              np.arange(100, 500, 1))
+
+### dictionary of all the bins for each batch (useful to have here because it is shared among many files)
+bins_dict = {
+    100:bins3, # x x
+    101:bins3, # x x
+    199:bins3, # x x
+    201:bins1, # x x
+    202:bins1, # x x
+    203:bins1, # x x
+    204:bins1, # x x   # weird time resolution
+    205:bins4, # x x
+    206:bins4, # x x
+    301:bins1, # x x
+    401:bins1, # x x
+    402:bins1, # x x
+    403:bins1, # x x
+    407:bins1, # x x
+    408:bins1, # x x
+    409:bins1, # x x
+    410:bins1, # x x
+    411:bins1, # x x    sensor Ch2 in S1 probably outside area of interest
+    413:bins1, # x x
+    414:bins1, # x x
+    501:bins2, # x x   (in all 5xx, S1 and S2: use=time in the geometry_mask) sensor Ch2 in S1 seems weird
+    502:bins2, # x x
+#     503:bins2, # x x   sensors moved during the diffent runs (because the temperature changed, OR I EXCLUDE THEM AND STUDY THEM SEPARATELY)
+    5031:bins2, #     very different temperature between 503.1 and 503.2
+    5032:bins2, #    504:bins2, # x x   sensor ch4 in S1 is very irradiated and seems to have negative pulseHeight BG noise
+    505:bins2, # x x   sensor Ch4 in S1 seems dead, sensor Ch2 ins S2 
+    601:bins4, # x x   in all 6xx, Ch2 in S2 seem to be cut out (use=time)  Ch4 in S2 seems dead or outside area
+    602:bins4, # x x   (S1: use=pulseheight,   S2: use=time)
+    603:bins4, # x x   (S1: use=pulseheight,   S2: use=time)
+    604:bins4, # x x   (S1: use=pulseheight,   S2: use=time)
+    605:bins4, # x x   (S1: use=pulseheight,   S2: use=time)
+    701:bins1, # x x
+    702:bins1, # x x
+    801:bins1, # x x
+    802:bins1, # x x
+    901:bins1, # x x  (S1: use=time)  sensor Ch3 in S1 is outside the FEi4 area (or dead)
+    902:bins1, # x x  (S1: use=time)
+    1001:bins2, # x x  (S1 and S2 use=time)
+    1002:bins2, # x x  sensor ch4 in S2 seems dead
+    1101:bins2, # x x  sensor ch3 in S2 seems weird
+    1102:bins2, # x x  sensor ch2 and ch3 are outside the area
+    1201:bins2, # x x  sensor ch3 in S1 is missing the name (should be 'CNM W5')
+    1202:bins2, # x x
+}
 
 def get_DUTs_from_dictionary(dictionary, oscilloscope):
     """
