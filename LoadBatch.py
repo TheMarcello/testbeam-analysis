@@ -97,60 +97,6 @@ def load_batch(batch_number, oscilloscope, branches=None,
     return df
     
 
-### this IS NOT necessary anymore
-# ### pretty ugly but no alternatives right now
-# def get_transimpedance(batch, oscilloscope):
-#     """
-#     Pretty ugly function that links each batch to the transimpedance value of the board \
-#     it mounted on.
-#     """
-#     four_ch = 10700
-#     single_ch = 4700
-#     none = -1
-#     if batch>=100 and batch<200:     ### Ch2      Ch3       Ch4
-#         if oscilloscope=="S1":   return (four_ch, four_ch, four_ch)
-#         elif oscilloscope=="S2": return (single_ch, single_ch, four_ch)
-#     elif batch>=200 and batch<300:
-#         if oscilloscope=="S1":   return (four_ch, four_ch, none)
-#         elif oscilloscope=="S2": return (none, none, none)
-#     elif batch>=300 and batch<400:
-#         if oscilloscope=="S1":   return (four_ch, four_ch, none)
-#         elif oscilloscope=="S2": return (single_ch, single_ch, four_ch)
-#     elif batch>=400 and batch<500:
-#         if oscilloscope=="S1":   return (four_ch, four_ch, four_ch)
-#         elif oscilloscope=="S2": return (single_ch, single_ch, single_ch)
-#     elif batch>=500 and batch<600:
-#         if oscilloscope=="S1":   return (single_ch, single_ch, single_ch)
-#         elif oscilloscope=="S2": return (single_ch, single_ch, none)
-#     elif batch>=600 and batch<700:
-#         if oscilloscope=="S1":   return (four_ch, four_ch, four_ch)
-#         elif oscilloscope=="S2": return (single_ch, single_ch, four_ch)
-#     elif batch>=700 and batch<800:
-#         if oscilloscope=="S1":   return (four_ch, four_ch, four_ch)
-#         elif oscilloscope=="S2": return (none, none, four_ch)
-#     elif batch>=800 and batch<900:
-#         if oscilloscope=="S1":   return (none, none, none)
-#         elif oscilloscope=="S2": return (single_ch, single_ch, none)
-#     elif batch>=900 and batch<1000:
-#         if oscilloscope=="S1":   return (single_ch, single_ch, none)
-#         elif oscilloscope=="S2": return (none, none, none)
-#     elif batch>=1000 and batch<1100:
-#         if oscilloscope=="S1":   return (four_ch, four_ch, four_ch)
-#         elif oscilloscope=="S2": return (single_ch, single_ch, four_ch)
-#     elif batch>=1100 and batch<1200:
-#         if oscilloscope=="S1":   return (single_ch, single_ch, none)
-#         elif oscilloscope=="S2": return (single_ch, single_ch, none)
-#     elif batch>=1200 and batch<1300:
-#         if oscilloscope=="S1":   return (single_ch, single_ch, none)
-#         elif oscilloscope=="S2": return (none, none, none)
-#     elif batch>=1300 and batch<1400:
-#         if oscilloscope=="S1":   return (none, none, none)
-#         elif oscilloscope=="S2": return (none, single_ch, none)
-#     else:     ### last case, return all none
-#         if oscilloscope=="S1":   return (none, none, none)
-#         elif oscilloscope=="S2": return (none, none, none)
-
-
 def root_to_df(file_path, branches):
     """
     Converts a file.root into pandas DataFrame unpacking branches with multiple channels \
@@ -257,7 +203,12 @@ def charge_fit(df, dut, mask, transimpedance, bins=500, p0=None, plot=True, save
     charge_estimate = bins_centers[np.argmax(hist)]
     logging.info(f'First charge estimate: {charge_estimate}')
     if p0 is None: p0 = (np.abs(charge_estimate),1,1,np.max(hist))
-    param, covariance = curve_fit(pylandau.langau, bins_centers, hist, p0=p0)
+    try:
+        param, covariance = curve_fit(pylandau.langau, bins_centers, hist, p0=p0)
+    except RuntimeError:
+        logging.error(f"RuntimeError during charge fit of dut{dut}, parameters set to p0, and covariance set to zero")
+        param = p0
+        covariance = np.zeros(shape=(len(p0),len(p0)))
     if plot:
         ax.plot(bins_centers, pylandau.langau(bins_centers, *param),
                 label=f"$MPV$: %.1f, $\eta$: %.1f, $\sigma$: %.1f, A: %.0f" %(param[0],param[1], param[2], param[3]), **kwargs)
