@@ -68,7 +68,8 @@ bins_dict = {
     502:bins2, # x x
 #     503:bins2, # x x   sensors moved during the diffent runs (because the temperature changed, OR I EXCLUDE THEM AND STUDY THEM SEPARATELY)
     5031:bins2, #     very different temperature between 503.1 and 503.2
-    5032:bins2, #    504:bins2, # x x   sensor ch4 in S1 is very irradiated and seems to have negative pulseHeight BG noise
+    5032:bins2, #    
+    504:bins2, # x x   sensor ch4 in S1 is very irradiated and seems to have negative pulseHeight BG noise
     505:bins2, # x x   sensor Ch4 in S1 seems dead, sensor Ch2 ins S2 
     601:bins4, # x x   in all 6xx, Ch2 in S2 seem to be cut out (use=time)  Ch4 in S2 seems dead or outside area
     602:bins4, # x x   (S1: use=pulseheight,   S2: use=time)
@@ -694,7 +695,7 @@ def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None,
         ax.plot([],[], linewidth=0, label=f"$\sigma$: {param[2]:.2f} $\pm$ {param_error[2]:.2f} ps")
         ax.plot([],[], linewidth=0, label="$\chi^2_{reduced}$: "+f" {chi2_reduced:.3f}")
         ax.set_title("$\Delta$t gaussian fit"+title_info, fontsize=16)
-        ax.legend(fontsize=14)
+        ax.legend(fontsize=14, framealpha=0.5)
         if savefig:
             fig.savefig(savefig)
     return time_cut, {'parameters':param, 'parameters_errors':param_error, 'covariance':covar, 'covariance_errors':covar_error,
