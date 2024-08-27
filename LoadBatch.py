@@ -815,7 +815,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             if fig_ax:  fig, axes = fig_ax
             else:       fig, axes = plt.subplots(nrows=2, ncols=len(n_DUT), figsize=(6*len(n_DUT),12), constrained_layout=True, sharex=False, sharey=False, dpi=200)
             if bins is None: bins = (200,200)   ### default binning
-            # fig.tight_layout(w_pad=6, h_pad=6)
+            print_colorbar = False
             axes = np.atleast_2d(axes.T).T      ### so I can call axes[i,j] in any case (I add .T because np.atleast_2d makes only axes[0,i] available, and I want axes[i,0])
             for i,dut in enumerate(n_DUT): 
                 print(f"DUT_{dut}")                   ### BINS: scott, rice or sqrt; stone seems slow, rice seems the fastest
@@ -826,6 +826,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                     logging.warning("in '2D_Sensors', No minimum found, no 2D plot")
                     axes[0,i].set_title(f"Ch{dut+1}\n{batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}", fontsize=24)
                     continue
+                else: print_colorbar = True
                 plot_title = f"Ch{dut+1}, "+"cut:%.1f"%minimum+f"mV \n{batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
                 axes[0,i].set_title(plot_title, fontsize=20)
                 pulseHeight_filter = df[f"pulseHeight_{dut}"]>minimum
@@ -839,8 +840,9 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 secx.set_xlabel('mm', fontsize=20)
                 secy.set_ylabel('mm', fontsize=20)
             if title_position is None: title_position = 1.05
-            cb = fig.colorbar(im, ax=axes[1], fraction=0.1/len(n_DUT), pad=0.1)   ### this colorbar only counts the last 'im', not good
-            cb.set_label(label="Reconstructed tracks", fontsize=16)
+            if print_colorbar:
+                cb = fig.colorbar(im, ax=axes[1], fraction=0.1/len(n_DUT), pad=0.1)   ### this colorbar only counts the last 'im', not good
+                cb.set_label(label="Reconstructed tracks", fontsize=16)
 
 
         case "Time_pulseHeight":
