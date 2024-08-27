@@ -71,11 +71,11 @@ bins_dict = {
     5032:bins2, #    
     504:bins2, # x x   sensor ch4 in S1 is very irradiated and seems to have negative pulseHeight BG noise
     505:bins2, # x x   sensor Ch4 in S1 seems dead, sensor Ch2 ins S2 
-    601:bins4, # x x   in all 6xx, Ch2 in S2 seem to be cut out (use=time)  Ch4 in S2 seems dead or outside area
-    602:bins4, # x x   (S1: use=pulseheight,   S2: use=time)
-    603:bins4, # x x   (S1: use=pulseheight,   S2: use=time)
-    604:bins4, # x x   (S1: use=pulseheight,   S2: use=time)
-    605:bins4, # x x   (S1: use=pulseheight,   S2: use=time)
+    601:bins2, # x x   in all 6xx, Ch2 in S2 seem to be cut out (use=time)  Ch4 in S2 seems dead or outside area
+    602:bins2, # x x   (S1: use=pulseheight,   S2: use=time)
+    603:bins2, # x x   (S1: use=pulseheight,   S2: use=time)
+    604:bins2, # x x   (S1: use=pulseheight,   S2: use=time)
+    605:bins2, # x x   (S1: use=pulseheight,   S2: use=time)
     701:bins1, # x x
     702:bins1, # x x
     801:bins1, # x x
@@ -779,8 +779,8 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             axes = np.atleast_1d(axes)          ### for simplicity, so I can use axes[i] for a single DUT  
             for i,dut in enumerate(n_DUT):
 
-                if mask:  hist, _, _, im = axes[i].hist2d(df[f"Xtr_{dut-1}"].loc[mask[dut-1]], df[f"Ytr_{dut-1}"].loc[mask[dut-1]], bins=bins, **kwrd_arg)
-                else:       hist, _, _, im = axes[i].hist2d(df[f"Xtr_{dut-1}"], df[f"Ytr_{dut-1}"], bins=bins, **kwrd_arg)
+                if mask:  hist, _, _, im = axes[i].hist2d(df[f"Xtr_{dut-1}"].loc[mask[dut-1]], df[f"Ytr_{dut-1}"].loc[mask[dut-1]], bins=bins, cmin=1, **kwrd_arg)
+                else:       hist, _, _, im = axes[i].hist2d(df[f"Xtr_{dut-1}"], df[f"Ytr_{dut-1}"], bins=bins, cmin=1, **kwrd_arg)
                 
                 plot_title = f"Ch{dut+1}\n{batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
                 axes[i].set_title(plot_title, fontsize=20)
@@ -830,7 +830,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 axes[0,i].set_title(plot_title, fontsize=20)
                 pulseHeight_filter = df[f"pulseHeight_{dut}"]>minimum
                 _,_,_,im = axes[1,i].hist2d(df[f"Xtr_{dut-1}"].loc[pulseHeight_filter], df[f"Ytr_{dut-1}"].loc[pulseHeight_filter],
-                                                bins=bins, **kwrd_arg)
+                                                bins=bins, cmin=1, **kwrd_arg)
                 axes[1,i].set_aspect('equal')
                 axes[1,i].set_xlabel('pixels', fontsize=20)
                 axes[1,i].set_ylabel('pixels', fontsize=20)
@@ -970,10 +970,10 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 else:       bool_mask = pd.Series(True,index=df.index) 
                 if transimpedance is None:
                     transimpedance = batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').transimpedance
-                total_events_in_bin, x_edges, y_edges, _ = axes[i].hist2d(df[f"Xtr_{dut-1}"].loc[bool_mask], df[f"Ytr_{dut-1}"].loc[bool_mask], bins=bins)
+                total_events_in_bin, x_edges, y_edges, _ = axes[i].hist2d(df[f"Xtr_{dut-1}"].loc[bool_mask], df[f"Ytr_{dut-1}"].loc[bool_mask], bins=bins, cmin=1)
                 events_above_threshold = df[f"charge_{dut}"].loc[bool_mask]/transimpedance > threshold_charge
                 above_threshold = np.logical_and(bool_mask, events_above_threshold)  ### I THINK THIS IS REDUNDANT, maybe not ???
-                events_above_threshold_in_bin, _, _, _ = axes[i].hist2d(df[f"Xtr_{dut-1}"].loc[above_threshold], df[f"Ytr_{dut-1}"].loc[above_threshold], bins=bins)
+                events_above_threshold_in_bin, _, _, _ = axes[i].hist2d(df[f"Xtr_{dut-1}"].loc[above_threshold], df[f"Ytr_{dut-1}"].loc[above_threshold], bins=bins, cmin=1)
                 efficiency_map = np.divide(events_above_threshold_in_bin, total_events_in_bin, where=total_events_in_bin!=0,
                                         out=np.zeros_like(events_above_threshold_in_bin))*100 # in percentage
                 axes[i].clear()
