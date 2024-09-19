@@ -18,19 +18,19 @@ class Sensor:
     name:           name of the sensor
     dut_position:   position of the sensor (1-5)
     voltage:        voltage of the sensor [V]
-    angle:          angle of the sensor to the beam  ### not implemented because angles values are not consistent
+    current:        *measured* current [A]
     board:          name of the board on which the sensor is mounted
     fluence:        radiation given to the sensor [units?]
     transimpedance: transimpedance, it depends on the board (used to calculate charge) [units?]
     """
-    def __init__(self, name=NO_BOARD, dut_position=0, voltage=0, board=NO_BOARD, fluence=-1, transimpedance=-1):
+    def __init__(self, name=NO_BOARD, dut_position=0, voltage=0, current=0, board=NO_BOARD, fluence=-1, transimpedance=-1):
         self.name = name
         self.board = board
         self.dut_position = dut_position
         self.fluence = fluence
         self.transimpedance = transimpedance
         self.voltage = voltage
-
+        self.current = current
 
 class Oscilloscope:
     """
