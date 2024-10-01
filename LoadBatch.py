@@ -57,6 +57,7 @@ bins_dict = {
     401:bins1, # x x
     402:bins1, # x x
     403:bins1, # x x
+    406:bins1, # x x  ## not sure it's right
     407:bins1, # x x
     408:bins1, # x x
     409:bins1, # x x
@@ -156,7 +157,8 @@ def load_batch(batch_number, oscilloscope, branches=None,
     except FileNotFoundError:
         logging.error(f"File of batch {batch_number} not found")
         return
-    df = df.drop(columns=columns_to_remove)
+    # df = df.drop(columns=columns_to_remove)
+    df.drop(columns=columns_to_remove, inplace=True)
     return df
     
 
@@ -188,7 +190,9 @@ into 'Branch_0', 'Branch_1' etc. \n
             new_columns = pd.DataFrame(df_ak[name])
             new_columns.columns = [f'{name}']
             df = pd.concat([df,new_columns], axis=1)
-    del df_ak, tree         ### I am trying to fix the memory leak (not sure this is relevant)
+    del df_ak         ### I am trying to fix the memory leak (not sure this is relevant)
+    del tree
+    del new_columns
     return df
 
 
@@ -358,11 +362,14 @@ def efficiency_k_n(k,n):
 def error_propagation(time_difference, time_difference_error, MCP_resolution, MCP_resolution_error):
     """
     error propagation of delta_t^2 - MCP^2, which gives the time resolution of the DUT and its uncertainty
+    Return:
+    z
+    z_err
     """
     if time_difference**2 < MCP_resolution**2:
         logging.error(f"Invalid values of either Deltat or MCP resolution: {time_difference} and {MCP_resolution}")
     z = np.sqrt(time_difference**2 - MCP_resolution**2)
-    z_err = np.sqrt((time_difference**2 * time_difference_error**2 + MCP_resolution**2 * MCP_resolution_error**2) / z)
+    z_err = np.sqrt((time_difference**2 * time_difference_error**2 + MCP_resolution**2 * MCP_resolution_error**2)) / z
     return z, z_err
 
 
@@ -705,7 +712,7 @@ def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None,
 ### I want to add time_bins (now 5000)
 def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice', time_bins=5000, n_DUT=None, CFD_values=None, efficiency_lim=None, extra_info=True, info=True, 
         geometry_cut="normal", mask=None, threshold_charge=4, transimpedance=None, use='pulseheight', zoom_to_sensor=False, 
-        fig_ax=None, savefig=False, savefig_path='../various plots', savefig_details='', fmt='svg', title_position=None,
+        fig_ax=None, savefig=False, savefig_path='../various plots', savefig_details='', show_plot=True, fmt='svg', title_position=None,
         **kwrd_arg):
     """
     Function to produce the plots \n
@@ -745,6 +752,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
     savefig:        boolean option to save the plot
     savefig_path:   folder where to save the plot
     savefig_details: optional details for the file name (e.g. distinguish cuts)
+    show_plot:           boolean option to (not) show the plot (calls 'plt.close(fig)')
     fmt:            format of the file saved ('.jpg', '.svg', '.png' etc.)
     title_position: vertical displacement of the main title in the plot (each plot_type has its own defaults)
     Returns
@@ -1074,5 +1082,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
     if savefig: 
         file_name = f"{plot_type}_{batch_object.batch_number}{savefig_details}.{fmt}"
         fig.savefig(os.path.join(savefig_path, file_name), bbox_inches="tight")
+    if not show_plot:
+        plt.close(fig)
     return fig, axes
 
