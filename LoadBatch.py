@@ -148,7 +148,7 @@ def load_batch(batch_number, oscilloscope, branches=None,
     """
     if branches is None:
         branches = ["eventNumber", "Xtr", "Ytr", "pulseHeight", "charge", "noise", "timeCFD20", "timeCFD50", "timeCFD70"]
-    columns_to_remove = ["Xtr_4","Xtr_5","Xtr_6","Xtr_7","Ytr_4","Ytr_5","Ytr_6","Ytr_7"]
+    columns_to_remove = ["Xtr_3","Xtr_4","Xtr_5","Xtr_6","Xtr_7","Ytr_3","Ytr_4","Ytr_5","Ytr_6","Ytr_7"]
     logging.info(f"Loading batch {batch_number} \t Oscilloscope {oscilloscope}")    
     dir_path = os.path.join(data_path,oscilloscope)
     file_path = f"tree_May2023_{oscilloscope}_{batch_number}.root"
@@ -566,8 +566,8 @@ def geometry_mask(df, DUT_number, bins, bins_find_min='rice', only_select="norma
                 my_filter = time_mask(df, dut, bins=time_bins, plot=plot)[0]
             case other:
                 logging.warning(f"wrong parameter: {other}, options: 'pulseheight' or 'time' ")
-        Xtr_cut = df[f"Xtr_{dut}"].loc[my_filter]       ### X tracks with applied pulseHeight
-        Ytr_cut = df[f"Ytr_{dut}"].loc[my_filter]
+        Xtr_cut = df[f"Xtr_{dut-1}"].loc[my_filter]       ### X tracks with applied pulseHeight
+        Ytr_cut = df[f"Ytr_{dut-1}"].loc[my_filter]
         left_edge, right_edge = find_edges(Xtr_cut, bins=bins[0], use_kde=True)
         bottom_edge, top_edge = find_edges(Ytr_cut, bins=bins[1], use_kde=True)
     except:
@@ -581,28 +581,28 @@ def geometry_mask(df, DUT_number, bins, bins_find_min='rice', only_select="norma
             right_edge =    np.ceil(center[0] + central_edge/PIXEL_SIZE)
             bottom_edge =   np.floor(center[1] - central_edge/PIXEL_SIZE)
             top_edge =      np.ceil(center[1] + central_edge/PIXEL_SIZE)
-            xgeometry = np.logical_and(df[f"Xtr_{dut}"]>left_edge, df[f"Xtr_{dut}"]<right_edge)
-            ygeometry = np.logical_and(df[f"Ytr_{dut}"]>bottom_edge, df[f"Ytr_{dut}"]<top_edge)
+            xgeometry = np.logical_and(df[f"Xtr_{dut-1}"]>left_edge, df[f"Xtr_{dut-1}"]<right_edge)
+            ygeometry = np.logical_and(df[f"Ytr_{dut-1}"]>bottom_edge, df[f"Ytr_{dut-1}"]<top_edge)
             bool_geometry = np.logical_and(xgeometry, ygeometry)
         case "extended":
             left_edge, right_edge = extend_edges(left_edge, right_edge, fraction=fraction)
             bottom_edge, top_edge = extend_edges(bottom_edge, top_edge, fraction=fraction)
-            xgeometry = np.logical_and(df[f"Xtr_{dut}"]>left_edge, df[f"Xtr_{dut}"]<right_edge)
-            ygeometry = np.logical_and(df[f"Ytr_{dut}"]>bottom_edge, df[f"Ytr_{dut}"]<top_edge)
+            xgeometry = np.logical_and(df[f"Xtr_{dut-1}"]>left_edge, df[f"Xtr_{dut-1}"]<right_edge)
+            ygeometry = np.logical_and(df[f"Ytr_{dut-1}"]>bottom_edge, df[f"Ytr_{dut-1}"]<top_edge)
             bool_geometry = np.logical_and(xgeometry, ygeometry)
         case "normal":
-            xgeometry = np.logical_and(df[f"Xtr_{dut}"]>left_edge, df[f"Xtr_{dut}"]<right_edge)
-            ygeometry = np.logical_and(df[f"Ytr_{dut}"]>bottom_edge, df[f"Ytr_{dut}"]<top_edge)
+            xgeometry = np.logical_and(df[f"Xtr_{dut-1}"]>left_edge, df[f"Xtr_{dut-1}"]<right_edge)
+            ygeometry = np.logical_and(df[f"Ytr_{dut-1}"]>bottom_edge, df[f"Ytr_{dut-1}"]<top_edge)
             bool_geometry = np.logical_and(xgeometry, ygeometry)
         case "X":
             left_edge, right_edge = extend_edges(left_edge, right_edge, fraction=fraction)
-            xgeometry = np.logical_and(df[f"Xtr_{dut}"]>left_edge, df[f"Xtr_{dut}"]<right_edge)
-            ygeometry = np.logical_and(df[f"Ytr_{dut}"]>bottom_edge, df[f"Ytr_{dut}"]<top_edge)
+            xgeometry = np.logical_and(df[f"Xtr_{dut-1}"]>left_edge, df[f"Xtr_{dut-1}"]<right_edge)
+            ygeometry = np.logical_and(df[f"Ytr_{dut-1}"]>bottom_edge, df[f"Ytr_{dut-1}"]<top_edge)
             bool_geometry = np.logical_and(xgeometry, ygeometry)
         case "Y":
             bottom_edge, top_edge = extend_edges(bottom_edge, top_edge, fraction=fraction)
-            xgeometry = np.logical_and(df[f"Xtr_{dut}"]>left_edge, df[f"Xtr_{dut}"]<right_edge)
-            ygeometry = np.logical_and(df[f"Ytr_{dut}"]>bottom_edge, df[f"Ytr_{dut}"]<top_edge)
+            xgeometry = np.logical_and(df[f"Xtr_{dut-1}"]>left_edge, df[f"Xtr_{dut-1}"]<right_edge)
+            ygeometry = np.logical_and(df[f"Ytr_{dut-1}"]>bottom_edge, df[f"Ytr_{dut-1}"]<top_edge)
             bool_geometry = np.logical_and(xgeometry, ygeometry)
         case other:
             logging.warning(f"{other} is not an option, options are 'center', 'X', 'Y', 'normal'")
@@ -769,8 +769,8 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             axes = np.atleast_1d(axes)          ### for simplicity, so I can use axes[i] for a single DUT  
             for dut in n_DUT:
                 sensor_label = f"DUT: {batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
-                plot_histogram(df[f"Xtr_{dut}"], label=sensor_label, bins=bins[0], fig_ax=(fig,axes[0]), **kwrd_arg)
-                plot_histogram(df[f"Ytr_{dut}"], label=sensor_label, bins=bins[1], fig_ax=(fig,axes[1]), **kwrd_arg)
+                plot_histogram(df[f"Xtr_{dut-1}"], label=sensor_label, bins=bins[0], fig_ax=(fig,axes[0]), **kwrd_arg)
+                plot_histogram(df[f"Ytr_{dut-1}"], label=sensor_label, bins=bins[1], fig_ax=(fig,axes[1]), **kwrd_arg)
             axes[0].set_title("X axis projection", fontsize=20)
             axes[1].set_title("Y axis projection", fontsize=20)
             for ax in axes:     ### modify all axes
@@ -787,8 +787,8 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             axes = np.atleast_1d(axes)          ### for simplicity, so I can use axes[i] for a single DUT  
             for i,dut in enumerate(n_DUT):
 
-                if mask:  hist, _, _, im = axes[i].hist2d(df[f"Xtr_{dut}"].loc[mask[dut-1]], df[f"Ytr_{dut}"].loc[mask[dut-1]], bins=bins, cmin=1, **kwrd_arg)
-                else:       hist, _, _, im = axes[i].hist2d(df[f"Xtr_{dut}"], df[f"Ytr_{dut}"], bins=bins, cmin=1, **kwrd_arg)
+                if mask:  hist, _, _, im = axes[i].hist2d(df[f"Xtr_{dut-1}"].loc[mask[dut-1]], df[f"Ytr_{dut-1}"].loc[mask[dut-1]], bins=bins, cmin=1, **kwrd_arg)
+                else:       hist, _, _, im = axes[i].hist2d(df[f"Xtr_{dut-1}"], df[f"Ytr_{dut-1}"], bins=bins, cmin=1, **kwrd_arg)
                 
                 plot_title = f"Ch{dut+1}\n{batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
                 axes[i].set_title(plot_title, fontsize=20)
@@ -838,7 +838,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 plot_title = f"Ch{dut+1}, "+"cut:%.1f"%minimum+f"mV \n{batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
                 axes[0,i].set_title(plot_title, fontsize=20)
                 pulseHeight_filter = df[f"pulseHeight_{dut}"]>minimum
-                _,_,_,im = axes[1,i].hist2d(df[f"Xtr_{dut}"].loc[pulseHeight_filter], df[f"Ytr_{dut}"].loc[pulseHeight_filter],
+                _,_,_,im = axes[1,i].hist2d(df[f"Xtr_{dut-1}"].loc[pulseHeight_filter], df[f"Ytr_{dut-1}"].loc[pulseHeight_filter],
                                                 bins=bins, cmin=1, **kwrd_arg)
                 axes[1,i].set_aspect('equal')
                 axes[1,i].set_xlabel('pixels', fontsize=20)
@@ -980,10 +980,10 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 else:       bool_mask = pd.Series(True,index=df.index) 
                 if transimpedance is None:
                     transimpedance = batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').transimpedance
-                total_events_in_bin, x_edges, y_edges, _ = axes[i].hist2d(df[f"Xtr_{dut}"].loc[bool_mask], df[f"Ytr_{dut}"].loc[bool_mask], bins=bins, cmin=1)
+                total_events_in_bin, x_edges, y_edges, _ = axes[i].hist2d(df[f"Xtr_{dut-1}"].loc[bool_mask], df[f"Ytr_{dut-1}"].loc[bool_mask], bins=bins, cmin=1)
                 events_above_threshold = df[f"charge_{dut}"].loc[bool_mask]/transimpedance > threshold_charge
                 above_threshold = np.logical_and(bool_mask, events_above_threshold)  ### I THINK THIS IS REDUNDANT, maybe not ???
-                events_above_threshold_in_bin, _, _, _ = axes[i].hist2d(df[f"Xtr_{dut}"].loc[above_threshold], df[f"Ytr_{dut}"].loc[above_threshold], bins=bins, cmin=1)
+                events_above_threshold_in_bin, _, _, _ = axes[i].hist2d(df[f"Xtr_{dut-1}"].loc[above_threshold], df[f"Ytr_{dut-1}"].loc[above_threshold], bins=bins, cmin=1)
                 efficiency_map = np.divide(events_above_threshold_in_bin, total_events_in_bin, where=total_events_in_bin!=0,
                                         out=np.zeros_like(events_above_threshold_in_bin))*100 # in percentage
                 axes[i].clear()
