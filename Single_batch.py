@@ -144,7 +144,9 @@ for S in ['S1','S2']: #"S2" ### the two scopes
 
     ### I still need pulseHeight cut for the charge fit
     mins = [find_min_btw_peaks(df[S][f"pulseHeight_{dut}"], bins='rice', plot=False) if dut in DUTs else None for dut in [1,2,3]]
-    pulse_cuts = [df[S][f'pulseHeight_{dut}']>mins[dut-1] if dut in DUTs else None for dut in [1,2,3]]
+    ### also check that the pulseHeight is > pedestal + 3*noise
+    pulse_noise_cuts = [df[S][f"pedestal_{dut}"] + 3*df[S][f"noise_{dut}"]>mins[dut] if dut in DUTs else None for dut in [1,2,3]]
+    pulse_cuts = [np.logical_and(pulse_noise_cuts[S][dut-1], df[S][f'pulseHeight_{dut}']<mins[dut-1]) if dut in DUTs else None for dut in [1,2,3]]
     for dut in [1,2,3]:
         if (pulse_cuts[dut-1] is not None) and (np.alltrue(pulse_cuts[dut-1]==False)):
             pulse_cuts[dut-1] = pd.Series(True, index=df[S].index)

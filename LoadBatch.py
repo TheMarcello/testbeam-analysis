@@ -147,7 +147,7 @@ def load_batch(batch_number, oscilloscope, branches=None,
     df:                 pandas.Dataframe with all the required data
     """
     if branches is None:
-        branches = ["eventNumber", "Xtr", "Ytr", "pulseHeight", "charge", "noise", "timeCFD20", "timeCFD50", "timeCFD70"]
+        branches = ["eventNumber", "Xtr", "Ytr", "pulseHeight", "charge", "noise", "pedestal", "timeCFD20", "timeCFD50", "timeCFD70"]
     columns_to_remove = ["Xtr_3","Xtr_4","Xtr_5","Xtr_6","Xtr_7","Ytr_3","Ytr_4","Ytr_5","Ytr_6","Ytr_7"]
     logging.info(f"Loading batch {batch_number} \t Oscilloscope {oscilloscope}")    
     dir_path = os.path.join(data_path,oscilloscope)
