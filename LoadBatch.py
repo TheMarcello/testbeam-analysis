@@ -452,7 +452,7 @@ def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, pl
             recursion_depth += 1
             if recursion_depth==max_recursion:
                 logging.warning(f"Two PEAKS not found after {recursion_depth} iterations")
-                logging.info(": {info_peaks}")
+                logging.info(f": {info_peaks}")
                 return None
             peak_prominence *= 0.5    ### reduce prominence if the peaks are not found
             continue
