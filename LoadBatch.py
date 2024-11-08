@@ -225,7 +225,7 @@ def plot_histogram(data, bins='auto', poisson_err=False, error_band=False, fig_a
     if (poisson_err):      ### adding the poissonian error (sqrt(hist_point)
         bins_centers = (bins_points[1:]+bins_points[:-1])/2
         errorbar_parameters = {'markersize':0, 'linewidth':0, 'alpha':0.5,'ecolor':'k', 'elinewidth':0.3, 'capsize':1, 'errorevery':1}
-        errorbar_parameters.update(kwrd_arg)  ### this adds the default options (and overrides them if repeated)
+        # errorbar_parameters.update(kwrd_arg)  ### this adds the default options (and overrides them if repeated)
         if (np.shape(np.shape(data))[0]>1): ### a bit convoluted but checks the dimensions of the data
             for single_hist in hist:     ### in case data is a list of data
                 y_error = single_hist**0.5
@@ -634,14 +634,14 @@ def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None,
     time_cut:   boolean mask of the events within the calculated time frame 
     info:       dictionary containing other useful information about the time cut:
                     'parameters':       parameters of the gaussian fit 
-                    'parameters_errors':  and its uncertainty from bootstrap method (zero if no bootstrap) 
+                    'parameters_errors':  and their uncertainty from bootstrap method (zero if no bootstrap) 
                     'covariance':       covariance   "   "   "   "
-                    'covariance_errors':   and its uncertainty from bootstrap method (zero if no bootstrap)
+                    'covariance_errors':   and their uncertainty from bootstrap method (zero if no bootstrap)
                     'chi2_reduced':     reduced chi squared: chi^2/d.o.f.
                     'left_base':        value of the left edge of the cut
                     'right_base':       value of the right edge of the cut
     """
-    colormap = ['k','b','g','r']
+    colormap = ('k','b','g','r')
     dut = DUT_number
     window_limit = 20e3 #ps     ### -window_limit < delta t < +window_limit
     window_fit = np.logical_and((df[f"timeCFD{CFD_DUT}_{dut}"]-df[f"timeCFD{CFD_MCP}_0"]) > -window_limit,
@@ -658,7 +658,7 @@ def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None,
     bins_centers = (my_bins[:-1]+my_bins[1:])/2
     if p0 is None: p0 = (np.max(hist), bins_centers[np.argmax(hist)], 100, np.average(hist))
     try:
-        hist_error = (hist+1)**.5      ### relative (poissonian) error
+        hist_error = hist**.5 + 1   ### relative (poissonian) error
         density_factor = sum(hist*np.diff(my_bins))      ### to rescale the histogram after 
         if n_bootstrap:
             logging.info(f"Starting bootstrap for time resolution error with {n_bootstrap} iterations")
@@ -670,7 +670,7 @@ def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None,
                 hist_sample, _ = np.histogram(resampled_hist, bins=my_bins, density=True)
                 if i==0: p0 = (np.max(hist_sample), bins_centers[np.argmax(hist_sample)], 100, np.average(hist_sample))
                 ### actually including the error in the fit makes the fit worse (I guess because the 'zeros' have very small error(?) )
-                param, covar = curve_fit(my_gauss, bins_centers, hist_sample, p0=p0,# sigma=hist_error/density_factor, absolute_sigma=True, 
+                param, covar = curve_fit(my_gauss, bins_centers, hist_sample, p0=p0, sigma=hist_error/density_factor, absolute_sigma=True, 
                                          bounds=((0,-np.inf,0,0),(np.inf,np.inf,np.inf,np.inf)), nan_policy='omit')
                 param_list[i] = param
                 p0 = param      ### trying to set p0 to the old parameters to make convergence faster (?)
@@ -679,17 +679,18 @@ def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None,
             covar = covar_list.mean(axis=0)
             covar_error = covar_list.std(axis=0)
         else:
-            param, covar = curve_fit(my_gauss, bins_centers, hist, p0=p0,
-                                     bounds=((0,-np.inf,0,0),(np.inf,np.inf,np.inf,np.inf)), nan_policy='omit')
-            param_error, covar_error = np.zeros_like(param), np.zeros_like(covar)
             density_factor = 1
+            param, covar = curve_fit(my_gauss, bins_centers, hist, p0=p0, sigma=hist_error/density_factor, absolute_sigma=True, 
+                                     bounds=((0,-np.inf,0,0),(np.inf,np.inf,np.inf,np.inf)), nan_policy='omit')
+            param_error, covar_error = np.diagonal(covar)**.5, np.zeros_like(covar)
+        logging.info(f"in 'time_mask()': Fit parameters {param}")
     except:
         logging.error("in 'time_mask(): some error occurred while fitting, no time mask")
         return pd.Series(True, index=df.index), None
-    logging.info(f"in 'time_mask()': Fit parameters {param}")
-    # chi2_reduced = sum((hist-my_gauss(bins_centers,*param))**2/my_gauss(bins_centers,*param))/(len(hist)-len(param))
                 ###      (  Y_n - f(X_n)  )**2          /    sigma_n=(f_k**.5 / (N*bin_size)**.5 )     /  (d.o.f)                       
-    chi2_reduced = sum((hist - density_factor*my_gauss(bins_centers,*param))**2 / (hist_error)) / (len(hist)-len(param))
+    chi2_reduced = sum(((hist - density_factor*my_gauss(bins_centers,*param)) / hist_error)**2) / (len(hist)-len(param))
+    ### coefficient of determination R^2 = 1 - (sum of residuals / variance) * (n-1 / n-p-1)
+    R2_adjusted = 1 - (sum((hist - density_factor*my_gauss(bins_centers,*param))**2)/(len(hist)-len(param)-1) / (np.std(hist)**2/(len(hist)-1)) )
     left_base, right_base = param[1]-sigmas*np.abs(param[2]), param[1]+sigmas*np.abs(param[2])
     left_cut =  (df[f"timeCFD{CFD_DUT}_{dut}"]-df[f"timeCFD{CFD_MCP}_0"])>left_base
     right_cut = (df[f"timeCFD{CFD_DUT}_{dut}"]-df[f"timeCFD{CFD_MCP}_0"])<right_base
@@ -706,7 +707,7 @@ def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None,
         if savefig:
             fig.savefig(savefig)
     return time_cut, {'parameters':param, 'parameters_errors':param_error, 'covariance':covar, 'covariance_errors':covar_error,
-                      'chi2_reduced':chi2_reduced, 'left_base':left_base, 'right_base':right_base} # info 
+                      'chi2_reduced':chi2_reduced, 'R2_adjusted':R2_adjusted, 'left_base':left_base, 'right_base':right_base} # info 
     
 
 ### I want to add time_bins (now 5000)
