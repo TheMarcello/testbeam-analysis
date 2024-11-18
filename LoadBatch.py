@@ -91,10 +91,26 @@ bins_dict = {
     1202:bins2, # x x
 }
 
+def get_DUTs_from_channels(ch_list):
+    """
+    Small function to return a tuple of DUTs in the form: (1,2,3) from a list or sequence of Channels: (Ch2, Ch3, Ch4)
+    """
+    DUTs_list = []
+    for ch in list(ch_list):
+        match ch:
+            case 'Ch1' | 'ch1' |'Ch_1' | 'ch_1' :
+                logging.error(f" in get_DUTs_from_channels(), {ch} is MCP and not DUT")
+                return None
+            case 'Ch2' | 'ch2' |'Ch_2' | 'ch_2' : DUTs_list.append(1)
+            case 'Ch3' | 'ch3' |'Ch_3' | 'ch_3' : DUTs_list.append(2)
+            case 'Ch4' | 'ch4' |'Ch_4' | 'ch_4' : DUTs_list.append(3)
+    DUTs_list.sort()
+    return DUTs_list
+
 def get_DUTs_from_dictionary(dictionary, oscilloscope):
     """
     Small function to add the dut only if there is a 'board' and voltage>0
-    dictionary contains all the sensor.__dict__
+    'dictionary' contains all the sensor.__dict__ (it should work with pandas dataframe too, as long as index match (e.g. df[('S1', 'Ch2')]  )
     """
     DUTs = []
     if dictionary is not None:
@@ -629,15 +645,17 @@ def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None,
     plot:       boolean, if False: np.histogram is called instead, so that no plot is shown
     savefig:    boolean, if not False: the fig is saved at the path 'savefig' (include file name please)
     title_info: additional info to put in the title (e.g. batch number)
+
     Returns
     -------
-    time_cut:   boolean mask of the events within the calculated time frame 
+    time_cut:   boolean mask of the events within the calculated time frame
     info:       dictionary containing other useful information about the time cut:
                     'parameters':       parameters of the gaussian fit 
-                    'parameters_errors':  and their uncertainty from bootstrap method (zero if no bootstrap) 
+                    'parameters_errors':  and their uncertainty from the fit (or bootstrap method if used) 
                     'covariance':       covariance   "   "   "   "
-                    'covariance_errors':   and their uncertainty from bootstrap method (zero if no bootstrap)
+                    'covariance_errors':   and their uncertainty from the fit (or bootstrap method if used) 
                     'chi2_reduced':     reduced chi squared: chi^2/d.o.f.
+                    'R2_adjusted':      coefficient of determination (alternative to chi^2)
                     'left_base':        value of the left edge of the cut
                     'right_base':       value of the right edge of the cut
     """
@@ -756,6 +774,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
     show_plot:           boolean option to (not) show the plot (calls 'plt.close(fig)')
     fmt:            format of the file saved ('.jpg', '.svg', '.png' etc.)
     title_position: vertical displacement of the main title in the plot (each plot_type has its own defaults)
+
     Returns
     -------
     fig, axes:      figure and axis objects so that more manipulation can be done
@@ -1020,16 +1039,13 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             window_limit = 20e3
             xlim = (-7e3,-4.5e3)
             MCP_voltage = batch_object.S[this_scope].get_sensor('Ch1').voltage
-            match MCP_voltage:  ### last MCP_voltage entry
+            match MCP_voltage:  ### matche the MCP voltage to its time resolution
                 case 2500: 
-                    MCP_resolution = 36.52 # +/- 0.81
-                    MCP_error = 0.81
+                    MCP_resolution, MCP_error = 36.52, 0.81  # 36.52 +/- 0.81 ps
                 case 2600: 
-                    MCP_resolution = 16.48 # +/- 0.57
-                    MCP_error = 0.57
+                    MCP_resolution, MCP_error = 16.48, 0.57  # 16.48 +/- 0.57 ps
                 case 2800: 
-                    MCP_resolution = 3.73  # +/- 1.33
-                    MCP_error = 1.33
+                    MCP_resolution, MCP_error = 3.73, 1.33   # 3.73 +/- 1.33 ps
                 case other: logging.error("Incorrect MCP voltage")
 
             dut = n_DUT
@@ -1050,7 +1066,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                                         (df[f"timeCFD{CFD_DUT}_{dut}"]-df[f"timeCFD{CFD_MCP}_0"])< +window_limit)
                 dut_cut = np.logical_and(window_fit, dut_cut)
 
-                time_dict = time_mask(df, dut, bins=time_bins, n_bootstrap=50, plot=True, mask=dut_cut, CFD_DUT=CFD_DUT, CFD_MCP=CFD_MCP, 
+                time_dict = time_mask(df, dut, bins=time_bins, n_bootstrap=False, plot=True, mask=dut_cut, CFD_DUT=CFD_DUT, CFD_MCP=CFD_MCP, 
                                       title_info=f'\n CFD DUT:{CFD_DUT}% CFD MCP:{CFD_MCP}%', fig_ax=(fig,ax))[1]
 
                 param, param_err = time_dict['parameters'], time_dict['parameters_errors']
