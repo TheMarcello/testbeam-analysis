@@ -3,13 +3,13 @@ import matplotlib.pylab as plt # Matplotlib plots
 import matplotlib.colors as colors
 # import matplotlib.patches as mpatches
 from matplotlib.patches import Rectangle
-import mpl_scatter_density
+# import mpl_scatter_density
 import pandas as pd # Pandas
 import uproot
 import pickle
 import logging
 
-# import awkward as ak
+import awkward as ak
 # import mplhep as hep
 # import argparse     # to get arguments from command line executing file.py
 import os # read directories etc.
@@ -171,9 +171,11 @@ def load_batch(batch_number, oscilloscope, branches=None,
     try:
         df = root_to_df(os.path.join(dir_path, file_path), branches)
     except FileNotFoundError:
-        logging.error(f"File of batch {batch_number} not found")
+        logging.error(f"in load_batch(), File of batch {batch_number} not found, check your path: {data_path}")
         return
-    # df = df.drop(columns=columns_to_remove)
+    except Exception as e:
+        logging.error(f"in load_batch(), raised exception {e}")
+        return
     df.drop(columns=columns_to_remove, inplace=True)
     return df
     
@@ -191,8 +193,14 @@ into 'Branch_0', 'Branch_1' etc. \n
     -------
     df:         pandas DataFrame containing the branches (unpacked into multiple columns)
     """
-    try:    tree = uproot.open(file_path+":tree")
-    except: raise FileNotFoundError(f"no file named: {file_path}")  ### raise error if file not found
+    try:    
+        tree = uproot.open(file_path+":tree")
+    except FileNotFoundError:
+        logging.error(f"in root_to_df(), no file named: {file_path}")  ### error if file not found
+        return
+    except Exception as e:
+        logging.error(f"in root_to_df(), raised exception {e}")
+        return
     df_ak = tree.arrays(branches, library='ak') ### changed library from pd (pandas) to ak (awkward)
     df = pd.DataFrame()  ### empty dataframe
 
@@ -241,26 +249,25 @@ def plot_histogram(data, bins='auto', poisson_err=False, error_band=False, fig_a
     if (poisson_err):      ### adding the poissonian error (sqrt(hist_point)
         bins_centers = (bins_points[1:]+bins_points[:-1])/2
         errorbar_parameters = {'markersize':0, 'linewidth':0, 'alpha':0.5,'ecolor':'k', 'elinewidth':0.3, 'capsize':1, 'errorevery':1}
+        filled_band_parameters = {'alpha':0.5, 'linestyle':'--'}
         # errorbar_parameters.update(kwrd_arg)  ### this adds the default options (and overrides them if repeated)
         if (np.shape(np.shape(data))[0]>1): ### a bit convoluted but checks the dimensions of the data
             for single_hist in hist:     ### in case data is a list of data
                 y_error = single_hist**0.5
                 if error_band:  ### I just mask all the errorbars
-                    filled_band_parameters = {'alpha':0.5, 'linestyle':'--'}
                     errorbar_parameters.update({'elinewidth':0,'capsize':0,'errorevery':1})     ### defaults specific to 
                     ax.fill_between(bins_centers, single_hist-y_error, single_hist+y_error, **filled_band_parameters)#, label=f"{label} error")
                 ax.errorbar(bins_centers, single_hist, yerr=y_error, **errorbar_parameters)
         else:
             y_error = hist**0.5
             if error_band:      ### I just mask all the errorbars
-                filled_band_parameters = {'alpha':0.5, 'linestyle':'--'}
                 errorbar_parameters.update({'elinewidth':0,'capsize':0,'errorevery':1})
                 ax.fill_between(bins_centers, hist-y_error, hist+y_error, **filled_band_parameters)
             ax.errorbar(bins_centers, hist, yerr=y_error, **errorbar_parameters)
     return hist, bins_points, info, fig, ax
 
 
-def charge_fit(df, dut, mask, transimpedance, bins=500, p0=None, plot=True, savefig=False, **kwargs):
+def charge_fit(df, dut, mask, transimpedance, bins=500, p0=None, show_plot=True, savefig=False, **kwargs):
     """
     Function to find the best fit of the charge distribution to a Landau*Gaussian convolution
 
@@ -271,15 +278,15 @@ def charge_fit(df, dut, mask, transimpedance, bins=500, p0=None, plot=True, save
     mask:       boolean mask to apply to the data before plotting histogram and fitting (e.g. time_mask)
     transimpedance: transimpedance value (as df['charge_i'] needs to be divided by the transimpedance to get the actual charge)
     p0:         initial parameters of the fit
-    plot:       boolean if the plot should be shown
+    show_plot:  boolean if the plot should be shown
+    save_fig:   file path to save the figure generated (not saved if missing), can be used only if show_plot=True
 
     Returns
     -------
     param:      fit parameters (mpv, eta, sigma, A)
     covariance: covariance matrix of the fit parameters
     """
-    if plot:    hist,my_bins,_,fig,ax = plot_histogram(df[f'charge_{dut}'].loc[mask]/transimpedance, bins=bins,
-                                          label=f"CHARGE: Ch{dut+1}")
+    if show_plot:    hist,my_bins,_,fig,ax = plot_histogram(df[f'charge_{dut}'].loc[mask]/transimpedance, bins=bins, label=f"CHARGE: Ch{dut+1}")
     else:       hist,my_bins = np.histogram(df[f'charge_{dut}'].loc[mask]/transimpedance, bins=bins)
     bins_centers = (my_bins[1:]+my_bins[:-1])/2
     bins_centers = bins_centers.astype(np.float64)
@@ -292,7 +299,7 @@ def charge_fit(df, dut, mask, transimpedance, bins=500, p0=None, plot=True, save
         logging.error(f"RuntimeError during charge fit of dut{dut}, parameters set to p0, and covariance set to zero")
         param = p0
         covariance = np.zeros(shape=(len(p0),len(p0)))
-    if plot:
+    if show_plot:
         ax.plot(bins_centers, pylandau.langau(bins_centers, *param),
                 label=f"$MPV$: %.1f, $\eta$: %.1f, $\sigma$: %.1f, A: %.0f" %(param[0],param[1], param[2], param[3]), **kwargs)
         ax.semilogy()
@@ -370,9 +377,9 @@ def efficiency_k_n(k,n):
     error:      error=variance**0.5; variance=(k+1)*(k+2)/((n+2)*(n+3)) - (k+1)**2/(n+2)**2
     """
     ### this is the mean value, most probable value is still k/n
-    eff = np.where(np.logical_and(k>0,n>0), (k+1)/(n+2), 0)  
+    eff = np.where(np.logical_and(k>0,n>0), (k+1)/(n+2), 0)  ### np.where(condition, x, y) return x if condition==True and y otherwise
     var = np.where(np.logical_and(k>0,n>0), ((k+1)*(k+2)/((n+2)*(n+3)) - (k+1)**2/(n+2)**2 ), 0)
-    return (eff, var**(1/2))
+    return (eff, var**0.5)
 
 
 def error_propagation(time_difference, time_difference_error, MCP_resolution, MCP_resolution_error):
@@ -383,7 +390,8 @@ def error_propagation(time_difference, time_difference_error, MCP_resolution, MC
     z_err
     """
     if time_difference**2 < MCP_resolution**2:
-        logging.error(f"Invalid values of either Deltat or MCP resolution: {time_difference} and {MCP_resolution}")
+        logging.error(f"Invalid values of either Delta_t or MCP resolution: {time_difference} and {MCP_resolution}")
+        return
     z = np.sqrt(time_difference**2 - MCP_resolution**2)
     z_err = np.sqrt((time_difference**2 * time_difference_error**2 + MCP_resolution**2 * MCP_resolution_error**2)) / z
     return z, z_err
@@ -395,10 +403,11 @@ def time_limited_kde_evaluate(kde, x_axis):
     return kde.evaluate(x_axis)
 
 ### I can actually try to use np.gradient instead of find_peaks
-def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, plot=True,
+def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, show_plot=True,
                        savefig=False, savefig_path='../various plots/', savefig_details='', fig_ax=None):
     """
-    Finds the minimun between two peaks, using 'find_peaks()' function. \n
+    Finds the minimun between two peaks, using 'find_peaks()' function.
+    First it looks for (at least) two peaks, including the left edge, then looks for a minimum in the interval between these two\n
     Arguments
     ----------
     data:           data to be transformed into histogram and of which to find the peaks (e.g. df['pulseHeight_1'])
@@ -406,7 +415,7 @@ def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, pl
                     see https://numpy.org/doc/stable/reference/generated/numpy.histogram_bin_edges.html
     peak_prominence: "height" of the peaks compared to neighbouring data
     min_prominence:  "depth" of the min compared to neighbouring data
-    plot:           boolean, default True, if the plot will to be shown
+    show_plot:           boolean, default True, if the plot will to be shown
     savefig:        boolean, if the plot should be saved
     savefig_path:   path of the directory in which to save the plot
     savefig_details: additional details to add to the file name (e.g '_no_cut')
@@ -416,11 +425,10 @@ def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, pl
     -------
     x_min:          x position of the minimum
     """
-    if plot:
+    if show_plot:
         if fig_ax:  fig, ax = fig_ax
         else:       fig, ax = plt.subplots(figsize=(15,10), dpi=200)
-        hist, bins_hist, _, fig, ax = plot_histogram(data, bins=bins, poisson_err=True, error_band=True,
-                                                    fig_ax=(fig,ax))
+        hist, bins_hist, _, fig, ax = plot_histogram(data, bins=bins, poisson_err=True, error_band=True, fig_ax=(fig,ax))
         ax.semilogy()
         ax.set_ylim(10**(-2), 1.5*np.max(hist))
     ### use np.histogram if I don't want the plot
@@ -441,13 +449,13 @@ def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, pl
             if i==(number_of_tries-1):
                 logging.warning("Giving up evaluating kde")
                 return None
-        except:
-            logging.error(f"Unknown error evaluation kde")
+        except Exception as e:
+            logging.error(f"in find_min_between_peaks(), raised exception {e} when evaluating kde")
             break
         else:   ### when no exception occurs
             break
     ### it plots before it tries to find peaks and/or min
-    if plot:    ax.plot(bins_centers, smoothed_hist, linewidth=1, label='Smoothed hist')
+    if show_plot:    ax.plot(bins_centers, smoothed_hist, linewidth=1, label='Smoothed hist')
     if not peak_prominence: peak_prominence = np.max(hist)/100
     if not min_prominence:  min_prominence = np.max(hist)/100
     recursion_depth = 0  # 0 or 1, not sure which one gives 'max_recursion' tries
@@ -458,11 +466,11 @@ def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, pl
         peaks_idx, info_peaks = find_peaks(smoothed_hist, prominence=peak_prominence)
         global_max_idx = np.argmax(smoothed_hist)
         if (len(peaks_idx)==1) and (global_max_idx!=peaks_idx[0]):  ### find_peaks() does not find max values at edges,
-            peaks_idx = np.append(global_max_idx, peaks_idx)        ### so I the global max (if not identical to the peak found)
+            peaks_idx = np.append(global_max_idx, peaks_idx)        ### so I manually add the global max (if not identical to the other peak found)
 
         if len(peaks_idx)>=2:       ### find the minimum
+            ### ACTUALLY I SHOULD JUST USE THE ARGMIN/MAX AFTER I FOUND THE TWO PEAKS, NO REASON TO USE find_peaks()
             local_min, _ = find_peaks(-smoothed_hist[peaks_idx[0]:peaks_idx[1]], prominence=min_prominence)
-            
         else:    ### if it doesn't work it's because only one peak was found
             logging.debug("Two peaks not found, retrying")
             recursion_depth += 1
@@ -472,8 +480,8 @@ def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, pl
                 return None
             peak_prominence *= 0.5    ### reduce prominence if the peaks are not found
             continue
-        if len(local_min)==1:
-            break
+        if len(local_min)==1:   break
+
         elif len(local_min)>1:
             logging.warning(f"More than one minimum found at: {[bins_centers[min_idx+peaks_idx[0]] for min_idx in local_min]}")
             break
@@ -485,32 +493,33 @@ def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, pl
             min_prominence *= 0.5       ### reduce prominence if the min is not found
 
     x_min = bins_centers[local_min[0]+peaks_idx[0]]
-    if plot:
+    if show_plot:
         ax.plot(bins_centers[peaks_idx], smoothed_hist[peaks_idx], 'x', markersize=10, color='k', label='Peaks')
         ax.plot(x_min, smoothed_hist[local_min[0]+peaks_idx[0]], 'o', markersize=10, color='r',
                 label='Mimimum: %.1f'%x_min, alpha=.7)
         ax.legend(fontsize=16)
-    if savefig: fig.savefig(f"{savefig_path}find_min_btw_peaks{savefig_details}.svg")
+        if savefig: fig.savefig(f"{savefig_path}find_min_btw_peaks{savefig_details}.svg")
 
     return  x_min 
 
 
-def find_edges(data, bins='rice', use_kde=True, plot=False):
+def find_edges(data, bins='rice', use_kde=True, show_plot=False):
     """
-    Finds the 'edges' of the dut (sensor) using the gradient of the hits distribution. \n
+    Finds the 'edges' of the dut (sensor) using the gradient of the hits distribution.
+    Could be useful for a wider range of applications. \n
     Arguments
     ----------
     data:       data to be put into histogram to find the edges
     bins:       matplot bins options e.g. int (number of bins), list (bin edges)
     use_kde:    boolean, if to use the kernel density estimate instead
-    plot:       boolean, if the plot should be shown
+    show_plot:       boolean, if the plot should be shown
 
     Returns
     -------
     left_edge:  left edge 
     right_edge: right edge
     """
-    if plot:    hist, bins_points, _ = plt.hist(data, bins=bins, histtype='step')
+    if show_plot:    hist, bins_points, _ = plt.hist(data, bins=bins, histtype='step')
     else:       hist, bins_points = np.histogram(data, bins=bins)  ### use np.histogram if I don't want the plot
     bins_centers = (bins_points[1:]+bins_points[:-1])/2
     if use_kde:
@@ -518,9 +527,11 @@ def find_edges(data, bins='rice', use_kde=True, plot=False):
         density_factor = sum(hist)*np.diff(bins_points)
         try:
             values = time_limited_kde_evaluate(kde, bins_centers)*density_factor
-        except:
+        except TimeoutError:
             logging.warning("in 'find_edges()': KDE timed out, using normal hist")
             values = hist
+        except Exception as e:
+            logging.error(f"in find_edges(), raised exception {e}")
     else:
         values = hist
     left_edge = bins_centers[np.argmax(np.gradient(values))]
@@ -539,7 +550,7 @@ def rectangle_from_geometry_cut(left_edge, right_edge, bottom_edge, top_edge, **
                      **default_arguments)
 
 
-def geometry_mask(df, DUT_number, bins, bins_find_min='rice', only_select="normal", plot=False, use='pulseheight', time_bins=5000, fraction=0.2):
+def geometry_mask(df, DUT_number, bins, bins_find_min='rice', only_select="normal", show_plot=False, use='pulseheight', time_bins=5000, fraction=0.2):
     """
     Creates a boolean mask for selecting the 2D shape of the dut (sensor) by applying a pulseHeight cut.
     If the minimum of the pulseHeight could not be found it returns all True
@@ -556,7 +567,7 @@ def geometry_mask(df, DUT_number, bins, bins_find_min='rice', only_select="norma
                         'normal':   full dut area 
                         'X':        only filters on one axis (X)
                         'Y':         "      "      "     "   (Y)
-    plot:           plot the fit of the 'find_min_btw_peaks()' or the 'time_mask()'
+    show_plot:      plot the fit of the 'find_min_btw_peaks()' or the 'time_mask()'
     use:            option to use pulseheight or time to determine the geometry cut
                         'pulseheight'
                         'time'
@@ -576,10 +587,10 @@ def geometry_mask(df, DUT_number, bins, bins_find_min='rice', only_select="norma
     try:
         match use:
             case 'pulseheight':
-                min_value = find_min_btw_peaks(df[f"pulseHeight_{dut}"], bins=bins_find_min, plot=plot)#True
+                min_value = find_min_btw_peaks(df[f"pulseHeight_{dut}"], bins=bins_find_min, show_plot=show_plot)#True
                 my_filter = df[f"pulseHeight_{dut}"]>min_value
             case 'time':
-                my_filter = time_mask(df, dut, bins=time_bins, plot=plot)[0]
+                my_filter = time_mask(df, dut, bins=time_bins, show_plot=show_plot)[0]
             case other:
                 logging.warning(f"wrong parameter: {other}, options: 'pulseheight' or 'time' ")
         Xtr_cut = df[f"Xtr_{dut-1}"].loc[my_filter]       ### X tracks with applied pulseHeight
@@ -626,7 +637,7 @@ def geometry_mask(df, DUT_number, bins, bins_find_min='rice', only_select="norma
     return bool_geometry, {'left_edge':left_edge, 'right_edge':right_edge, 'bottom_edge':bottom_edge, 'top_edge':top_edge}
 
 
-def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None, sigmas=3, CFD_DUT=20, CFD_MCP=50, plot=False, savefig=False, title_info='', fig_ax=None):
+def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None, sigmas=3, CFD_DUT=20, CFD_MCP=50, show_plot=False, savefig=False, title_info='', fig_ax=None):
     """
     Creates a boolean mask using a gaussian+background fit of the time difference between DUT and MCP.
     The fit is done in the time window -20e3 :_: 20e3
@@ -642,7 +653,7 @@ def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None,
     mask:       boolean array (only one array) to filter events where 'mask' is True (i.e. df['Xtr'].loc[mask[DUT]])
     p0:         initial parameters for the gaussian fit (A, mu, sigma, background)
     sigmas:     number of sigmas from the center to include in the time cut window
-    plot:       boolean, if False: np.histogram is called instead, so that no plot is shown
+    show_plot:       boolean, if False: np.histogram is called instead, so that no plot is shown
     savefig:    boolean, if not False: the fig is saved at the path 'savefig' (include file name please)
     title_info: additional info to put in the title (e.g. batch number)
 
@@ -669,7 +680,7 @@ def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None,
     else:
         boolean_mask = window_fit
     time_data = df[f"timeCFD{CFD_DUT}_{dut}"].loc[boolean_mask]-df[f"timeCFD{CFD_MCP}_0"].loc[boolean_mask]
-    if plot:
+    if show_plot:
         if fig_ax:  hist,my_bins,_,fig,ax = plot_histogram((time_data), bins=bins, poisson_err=True, fig_ax=fig_ax)
         else:       hist,my_bins,_,fig,ax = plot_histogram((time_data), bins=bins, poisson_err=True)
     else:       hist,my_bins = np.histogram((time_data), bins=bins, density=False)
@@ -713,7 +724,7 @@ def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None,
     left_cut =  (df[f"timeCFD{CFD_DUT}_{dut}"]-df[f"timeCFD{CFD_MCP}_0"])>left_base
     right_cut = (df[f"timeCFD{CFD_DUT}_{dut}"]-df[f"timeCFD{CFD_MCP}_0"])<right_base
     time_cut = np.logical_and(left_cut, right_cut)
-    if plot:
+    if show_plot:
         ax.set_xlim(param[1]-20*np.abs(param[2]), param[1]+30*np.abs(param[2])) ### sligthly asymmetric to fit the legend better
         ax.set_xlabel(f"$\Delta t$ [ps] (DUT - MCP)", fontsize=14)
         ax.set_ylabel("Events", fontsize=14)
@@ -847,7 +858,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             axes = np.atleast_2d(axes.T).T      ### so I can call axes[i,j] in any case (I add .T because np.atleast_2d makes only axes[0,i] available, and I want axes[i,0])
             for i,dut in enumerate(n_DUT): 
                 print(f"DUT_{dut}")                   ### BINS: scott, rice or sqrt; stone seems slow, rice seems the fastest
-                minimum = find_min_btw_peaks(df[f"pulseHeight_{dut}"], bins=bins_find_min, plot=True, fig_ax=(fig,axes[0,i]), savefig=False)
+                minimum = find_min_btw_peaks(df[f"pulseHeight_{dut}"], bins=bins_find_min, show_plot=True, fig_ax=(fig,axes[0,i]), savefig=False)
                 axes[0,i].set_xlabel('mV', fontsize=20)
                 axes[0,i].set_ylabel('Events', fontsize=20)
                 if not minimum:
@@ -891,12 +902,12 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 ### I am starting to think that this part should not be here at all
                 ### only calculate pulseheight and time cut if asked
                 if info==True:
-                    pulse_cut = find_min_btw_peaks(df[f"pulseHeight_{dut}"], bins=bins_find_min, plot=False)
+                    pulse_cut = find_min_btw_peaks(df[f"pulseHeight_{dut}"], bins=bins_find_min, show_plot=False)
                     if pulse_cut is None:
                         pulse_cut = 0
                     else:
                         axes[i].axhline(pulse_cut, color='r', label="PulseHeight cut value: %.1f mV"%pulse_cut)
-                    time_info = time_mask(df, dut, bins=bins, plot=False)[1]
+                    time_info = time_mask(df, dut, bins=bins, show_plot=False)[1]
                     if time_info is not None:
                         left_base, right_base = time_info['left_base'], time_info['right_base']
                         axes[i].axvline(left_base, color='g', alpha=.9, label="Time cut: %.0fps$<\Delta t<$ %.0fps"%(left_base, right_base))
@@ -1051,7 +1062,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             dut = n_DUT
             fig, axes = plt.subplots(figsize=(6*axes_size,4*axes_size), nrows=axes_size, ncols=axes_size, dpi=300)
             
-            ### I NEED TO RETURN THIS VALUES
+            ### I NEED TO RETURN THIS VALUES (I am currently not returning this values, so boh?)
             time_resolution_table = []
             chi2_table = []
 
@@ -1066,13 +1077,12 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                                         (df[f"timeCFD{CFD_DUT}_{dut}"]-df[f"timeCFD{CFD_MCP}_0"])< +window_limit)
                 dut_cut = np.logical_and(window_fit, dut_cut)
 
-                time_dict = time_mask(df, dut, bins=time_bins, n_bootstrap=False, plot=True, mask=dut_cut, CFD_DUT=CFD_DUT, CFD_MCP=CFD_MCP, 
+                time_dict = time_mask(df, dut, bins=time_bins, n_bootstrap=False, show_plot=True, mask=dut_cut, CFD_DUT=CFD_DUT, CFD_MCP=CFD_MCP, 
                                       title_info=f'\n CFD DUT:{CFD_DUT}% CFD MCP:{CFD_MCP}%', fig_ax=(fig,ax))[1]
 
                 param, param_err = time_dict['parameters'], time_dict['parameters_errors']
 
-                time_resolution_table.append(error_propagation(param[2], param_err[2],
-                                                            MCP_resolution, MCP_error))
+                time_resolution_table.append(error_propagation(param[2], param_err[2], MCP_resolution, MCP_error))
                 # time_resolution_table.append(np.sqrt(param[2]**2-MCP_resolution**2))
                 chi2_table.append(time_dict['chi2_reduced'])
 
@@ -1089,7 +1099,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
 
 
         case other:
-            logging.error(f"""{other} not a plot option. Options are:
+            logging.error(f"""in plot() function, {other} is not a plot option. Options are:
             '1D_Tracks', '2D_Tracks', 'pulseHeight', '2D_Sensors', '1D_Efficiency', '2D_Efficiency', 'Time_pulseHeight', 'CFD_comparison' """)
             return
     
