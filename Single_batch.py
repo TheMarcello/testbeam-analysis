@@ -1,22 +1,23 @@
 import numpy as np # NumPy
 import matplotlib.pylab as plt # Matplotlib plots
-import matplotlib.patches as mpatches
-import matplotlib.colors as colors
+# import matplotlib.patches as mpatches
+# import matplotlib.colors as colors
 import mpl_scatter_density     # density scatter plots
 import pandas as pd # Pandas
-import uproot
-import pickle
+# import uproot
+# import pickle
 import logging
 import argparse     # to get arguments from command line executing file.py
 
 import os # read directories etc.
-from scipy.signal import find_peaks, gaussian
-from scipy.optimize import curve_fit
-from scipy.stats import gaussian_kde
-import pylandau
+import sys # to pass the argv to the main() function
+# from scipy.signal import find_peaks, gaussian
+# from scipy.optimize import curve_fit
+# from scipy.stats import gaussian_kde
+# import pylandau
 
 import time
-from timeout_decorator import timeout
+# from timeout_decorator import timeout
 
 from importlib import reload # to reload modules
 import LoadBatch
@@ -25,11 +26,16 @@ from LoadBatch import *
 from SensorClasses import *
 
 
-def analysis_batch(this_batch, batch_object, S, n_DUT=None, do_plots=True, SAVE=True, CFD_comparison=False, fit_charge=False, return_results=True):
+def analysis_batch(this_batch, batch_object, S, n_DUT=None, do_plots=True, show_plot=False, SAVE=True, CFD_comparison=False, fit_charge=False, return_results=True, dir_path=None, ROOT_fit_dir=None):
+    """
+    Performs analysis 
+    
+    """
     
     ### I want to keep this specific directory for many reasons (fit charge, all plots etc.)
-    dir_path = f'/home/marcello/Desktop/Radboud_not_synchro/Master_Thesis/various plots/all batches/{this_batch}'
-    ROOT_fit_dir = f"/home/marcello/Desktop/Radboud_not_synchro/Master_Thesis/testbeam-analysis/ROOT_Langaus_fit/Charge_fit_results"
+    if dir_path is None:    dir_path = f'/home/marcello/Desktop/Radboud_not_synchro/Master_Thesis/various plots/all batches/{this_batch}'
+    if ROOT_fit_dir is None:    ROOT_fit_dir = f"/home/marcello/Desktop/Radboud_not_synchro/Master_Thesis/testbeam-analysis/ROOT_Langaus_fit/Charge_fit_results"
+
     if not os.path.exists(dir_path):
         logging.warning(f"in analysis_batch(), the path: {dir_path} does not exist, creating directory")
         os.mkdir(dir_path)
@@ -52,10 +58,8 @@ def analysis_batch(this_batch, batch_object, S, n_DUT=None, do_plots=True, SAVE=
     logging.info(f"in analysis_batch(), analysing Batch: {this_batch}, {S}")
 
     info_df = pd.read_pickle(os.path.join(dir_path,f'table_data_{this_batch}.pickle'))
-    if not n_DUT:
-        DUTs = get_DUTs_from_dictionary(info_df,S)
-    else:
-        DUTs = n_DUT
+    if not n_DUT:   DUTs = get_DUTs_from_dictionary(info_df,S)
+    else:           DUTs = n_DUT
     if not DUTs:     ### if there are no DUTs in this oscilloscope
         logging.error("in analysis_batch(), No DUTs selected, no analysis or plot performed")
         return dict()
@@ -70,11 +74,11 @@ def analysis_batch(this_batch, batch_object, S, n_DUT=None, do_plots=True, SAVE=
     ### [ ... if dut in DUTs else None for dut in [1,2,3]], it avoids calculating the cuts for the channels with no dut
     geo_cuts = [geometry_mask(df[S], DUT_number=dut, bins=these_bins, bins_find_min='rice', use=use_for_geometry_cut)[0] if dut in DUTs else None for dut in [1,2,3]]
     central_sensor_area_cuts = [geometry_mask(df[S], DUT_number=dut, bins=these_bins, bins_find_min='rice', only_select='center', use=use_for_geometry_cut)[0] if dut in DUTs else None for dut in [1,2,3]]
-    time_cuts = [time_mask(df[S], dut, bins=time_bins, mask=geo_cuts[dut-1], n_bootstrap=False, plot=False, savefig=os.path.join(dir_path,f'time_plot_with_geo_cuts_{S}_{this_batch}_DUT{dut}.png'))[0] if dut in DUTs else None for dut in [1,2,3]]
+    time_cuts = [time_mask(df[S], dut, bins=time_bins, mask=geo_cuts[dut-1], n_bootstrap=False, show_plot=False, savefig=os.path.join(dir_path,f'time_plot_with_geo_cuts_{S}_{this_batch}_DUT{dut}.png'))[0] if dut in DUTs else None for dut in [1,2,3]]
     charge_cuts = [df[S][f'charge_{dut}']/my_transimpedance>threshold_charge if dut in DUTs else None for dut in [1,2,3]]
 
     ### I still need pulseHeight cut for the charge fit
-    mins = [find_min_btw_peaks(df[S][f"pulseHeight_{dut}"], bins='rice', plot=False) if dut in DUTs else None for dut in [1,2,3]]
+    mins = [find_min_btw_peaks(df[S][f"pulseHeight_{dut}"], bins='rice', show_plot=False) if dut in DUTs else None for dut in [1,2,3]]
     ### also check that the pulseHeight is > pedestal + 3*noise
     pulse_noise_cuts = [df[S][f'pulseHeight_{dut}']>(df[S][f"pedestal_{dut}"]+3*df[S][f"noise_{dut}"]) if dut in DUTs else None for dut in [1,2,3]]
     pulse_cuts = [np.logical_and(pulse_noise_cuts[dut-1], df[S][f'pulseHeight_{dut}']>mins[dut-1]) if dut in DUTs else None for dut in [1,2,3]]
@@ -97,55 +101,44 @@ def analysis_batch(this_batch, batch_object, S, n_DUT=None, do_plots=True, SAVE=
         for dut in DUTs:
             np.savetxt(os.path.join(dir_path, f"charge_data_all_cuts_{this_batch}_{S}_{dut}.csv"),
                         df[S][f'charge_{dut}'].loc[all_cuts[dut-1]]/my_transimpedance, delimiter=',')
-            os.chdir(ROOT_fit_dir)
+            os.chdir(os.path.join(ROOT_fit_dir,'..'))
+            ### THIS IS NOT WORKING ???
             run_root_string = f'root -b -q "charge_fit.C({this_batch},\\"{S}\\",{dut})"'
             os.system(run_root_string)
-    # else:
-    #     pass
             
 ### ALL OF THE PLOTS
-    ### time resolution fit
-    for dut in DUTs:
-        time_mask(df[S], dut, bins=100, n_bootstrap=n_bootstrap, mask=np.logical_and(geo_cuts[dut-1], time_fit_cuts[dut-1]), plot=do_plots,
-                                    savefig=os.path.join(dir_path,f'time_plot_with_geo_cuts_{S}_{this_batch}_DUT{dut}.png'))[1]['parameters']
-        
-    [time_mask(df[S], dut, bins=100, n_bootstrap=n_bootstrap, mask=np.logical_and(geo_cuts[dut-1], time_fit_cuts[dut-1]), plot=do_plots,
-                                    savefig=os.path.join(dir_path,f'time_plot_with_geo_cuts_{S}_{this_batch}_DUT{dut}.png'))[1]['parameters'] if dut in DUTs else None for dut in [1,2,3]]
-    ### time resolution fit with central area cuts
-    [time_mask(df[S], dut, bins=100, n_bootstrap=n_bootstrap, mask=np.logical_and(central_sensor_area_cuts[dut-1], time_fit_cuts[dut-1]), plot=do_plots, title_info=' center cut',
-                                    savefig=os.path.join(dir_path,f'time_plot_with_center_cuts_{S}_{this_batch}_DUT{dut}.png'))[1]['parameters'] if dut in DUTs else None for dut in [1,2,3]]
     if do_plots:
         ## show full area
         plot(df[S], "2D_Tracks", batch_object, S, bins=large_bins,
-                n_DUT=DUTs, savefig=SAVE, savefig_details=f' {S} all tracks (no cut)', savefig_path=dir_path, fmt='png', show_plot=True)  
+                n_DUT=DUTs, show_plot=show_plot, savefig=SAVE, savefig_details=f' {S} all tracks (no cut)', savefig_path=dir_path, fmt='png')  
         ### highlight the sensors with pulseHeight cut
         plot(df[S], "2D_Sensors", batch_object, S, bins=these_bins, bins_find_min=binning_method,
-                n_DUT=DUTs, savefig=SAVE, savefig_details=f' {S} (pulseHeight cut)', savefig_path=dir_path, fmt='png')    
+                n_DUT=DUTs, show_plot=show_plot, savefig=SAVE, savefig_details=f' {S} (pulseHeight cut)', savefig_path=dir_path, fmt='png')    
         ### highlight the sensors with time cut
         plot(df[S], "2D_Tracks", batch_object, S, bins=these_bins, mask=time_cuts,
-                n_DUT=DUTs, savefig=SAVE, savefig_details=f' {S} (w. time cut)', savefig_path=dir_path, fmt='png')
+                n_DUT=DUTs, show_plot=show_plot, savefig=SAVE, savefig_details=f' {S} (w. time cut)', savefig_path=dir_path, fmt='png')
         # delta time vs pulseHeight w/ info
         plot(df[S], "Time_pulseHeight", batch_object, S, bins=time_bins,
-                n_DUT=DUTs, savefig=SAVE, savefig_details=f' {S} ', savefig_path=dir_path, fmt='png')
+                n_DUT=DUTs, show_plot=show_plot, savefig=SAVE, savefig_details=f' {S} ', savefig_path=dir_path, fmt='png')
         ### delta time vs pulseHeight no info
         plot(df[S], "Time_pulseHeight", batch_object, S, bins=time_bins, info=False, extra_info=False,
-                n_DUT=DUTs, savefig=SAVE, savefig_details=f' {S} no info', savefig_path=dir_path, fmt='png') 
+                n_DUT=DUTs, show_plot=show_plot, savefig=SAVE, savefig_details=f' {S} no info', savefig_path=dir_path, fmt='png') 
         ### delta time vs pulseHeight central area no info
         plot(df[S], "Time_pulseHeight", batch_object, S, bins=time_bins, info=False, extra_info=False, mask=central_sensor_area_cuts,
-                n_DUT=DUTs, savefig=SAVE, savefig_details=f' {S} central area', savefig_path=dir_path, fmt='png')
+                n_DUT=DUTs, show_plot=show_plot, savefig=SAVE, savefig_details=f' {S} central area', savefig_path=dir_path, fmt='png')
         ### efficiency projection whole sensor (zooomed)
         plot(df[S], "1D_Efficiency", batch_object, S, threshold_charge=threshold_charge, transimpedance=my_transimpedance, geometry_cut='normal', use=use_for_geometry_cut, zoom_to_sensor=True, efficiency_lim=eff_lim,
-            bins=these_bins, bins_find_min=binning_method, n_DUT=DUTs, savefig=SAVE, savefig_details=f' {S} threshold charge {threshold_charge}fC', savefig_path=dir_path)
+            bins=these_bins, bins_find_min=binning_method, n_DUT=DUTs, show_plot=show_plot, savefig=SAVE, savefig_details=f' {S} threshold charge {threshold_charge}fC', savefig_path=dir_path)
         ### with time cut in the center (zoomed)
         plot(df[S], "1D_Efficiency", batch_object, S, threshold_charge=threshold_charge, transimpedance=my_transimpedance, geometry_cut='center', use=use_for_geometry_cut, mask=time_cuts, zoom_to_sensor=True, efficiency_lim=eff_lim,
-            bins=these_bins, bins_find_min=binning_method, n_DUT=DUTs, savefig=SAVE, savefig_details=f' {S} threshold charge {threshold_charge}fC (center and time cut)', savefig_path=dir_path)
+            bins=these_bins, bins_find_min=binning_method, n_DUT=DUTs, show_plot=show_plot, savefig=SAVE, savefig_details=f' {S} threshold charge {threshold_charge}fC (center and time cut)', savefig_path=dir_path)
         ### 2D efficiency
         plot(df[S], "2D_Efficiency", batch_object, S, threshold_charge=threshold_charge, transimpedance=my_transimpedance, geometry_cut='normal', use=use_for_geometry_cut, zoom_to_sensor=True,
-            bins=these_bins, bins_find_min=binning_method, n_DUT=DUTs, savefig=SAVE, savefig_details=f' {S} thresh charge {threshold_charge}fC', savefig_path=dir_path, fmt='png')
+            bins=these_bins, bins_find_min=binning_method, n_DUT=DUTs, show_plot=show_plot, savefig=SAVE, savefig_details=f' {S} thresh charge {threshold_charge}fC', savefig_path=dir_path, fmt='png')
         ### with time cut and zoomed
         plot(df[S], "2D_Efficiency", batch_object, S, threshold_charge=threshold_charge, transimpedance=my_transimpedance, geometry_cut='normal', use=use_for_geometry_cut, mask=time_cuts, zoom_to_sensor=True,
-            bins=these_bins, bins_find_min=binning_method, n_DUT=DUTs, savefig=SAVE, savefig_details=f' {S} thresh charge {threshold_charge}fC (center and time cut)', savefig_path=dir_path, fmt='png')    
-        plt.close('all')
+            bins=these_bins, bins_find_min=binning_method, n_DUT=DUTs, show_plot=show_plot, savefig=SAVE, savefig_details=f' {S} thresh charge {threshold_charge}fC (center and time cut)', savefig_path=dir_path, fmt='png')    
+        # plt.close('all')
 
 ### CFD COMPARISON PLOTS
     if CFD_comparison:
@@ -198,9 +191,14 @@ def analysis_batch(this_batch, batch_object, S, n_DUT=None, do_plots=True, SAVE=
                 MCP_resolution, MCP_error = 16.48, 0.57  # 16.48 +/- 0.57 ps
             case 2800: 
                 MCP_resolution, MCP_error = 3.73, 1.33   # 3.73 +/- 1.33 ps
-            case other: logging.error(f"in analysis_batch(), incorrect MCP voltage: {other}")    
+            case other: logging.error(f"in analysis_batch(), incorrect MCP voltage: {other}")
         try:
-            time_dict = time_mask(df[S], dut, bins=100, n_bootstrap=False, plot=do_plots, mask=np.logical_and(np.logical_and(central_sensor_area_cuts[dut-1],charge_cuts[dut-1]),time_cuts[dut-1]))[1]
+            # ### time resolution fit (full area)
+            # time_dict = time_mask(df[S], dut, bins=100, n_bootstrap=n_bootstrap, show_plot=show_plot, mask=np.logical_and(geo_cuts[dut-1], time_fit_cuts[dut-1]),
+            #                       savefig=os.path.join(dir_path,f'time_plot_with_geo_cuts_{S}_{this_batch}_DUT{dut}.png'))[1]
+            ### time resolution fit with central area cuts
+            time_dict = time_mask(df[S], dut, bins=100, n_bootstrap=n_bootstrap, show_plot=show_plot, mask=np.logical_and(central_sensor_area_cuts[dut-1], time_fit_cuts[dut-1]),
+                                  title_info=' center cut', savefig=os.path.join(dir_path,f'time_plot_with_center_cuts_{S}_{this_batch}_DUT{dut}.png'))[1]
             time_resolution, time_res_err = error_propagation(time_dict['parameters'][2], time_dict['parameters_errors'][2], MCP_resolution, MCP_error)
         except:
             logging.error(f"in analysis_batch(), Time fit error")
@@ -221,24 +219,25 @@ def analysis_batch(this_batch, batch_object, S, n_DUT=None, do_plots=True, SAVE=
 
 
 
-def main():
+def main(argv):
+    logging.basicConfig(level=logging.INFO, format='[%(levelname)s] - \t %(message)s')
+
         ### use the argparse package to parse command line arguments
     parser = argparse.ArgumentParser(description='Plot a single batch, given batch number and other arguments')
-    parser.add_argument('-batch', type=int, help='Batch number')
-    parser.add_argument('-S', type=bool, default=True, help='SAVE option to save plots (or not)')
-    parser.add_argument('-fit_charge', default=False, help='if charge should be fitted (with ROOT)')
-    parser.add_argument('-CFD', default=False, help='option for CFD comparison plots')
+    parser.add_argument('--batch', type=int, help='Batch number')
+    parser.add_argument('--SAVE', action='store_true', help='SAVE option to save plots (or not)')
+    parser.add_argument('--show_plots', action='store_true', help='option to show plots (or not)')
+    parser.add_argument('--fit_charge', action='store_true', help='if charge should be fitted (with ROOT)')
+    parser.add_argument('--CFD', action='store_true', help='option for CFD comparison plots')
     # parser.add_argument('-d', default=False, help='Output directory')
-    args = parser.parse_args()
+    args = parser.parse_args(argv[1:])
 
     this_batch = args.batch
     fit_charge = args.fit_charge
-    SAVE = args.S
+    SAVE = args.SAVE
+    show_plot = args.show_plots
     CFD_comparison = args.CFD
-
-    pd.set_option('display.max_columns', None)
-    # logging.basicConfig(level=logging.WARNING, format='[%(levelname)s] - %(message)s')
-    logging.basicConfig(level=logging.INFO, format='[%(levelname)s] - \t %(message)s')
+    logging.info(f"in main() of Single_batch.py, parsed arguments:  batch: {this_batch}, SAVE: {SAVE}, show_plot: {show_plot}, fit_charge: {fit_charge}, CFD_comp: {CFD_comparison}")
 
     ### Load the dictionary of sensor names and runs
     dict_of_batches = read_pickle("/home/marcello/Desktop/Radboud_not_synchro/Master_Thesis/testbeam-analysis/dict_of_batches.pickle")
@@ -259,12 +258,11 @@ def main():
 
     for S in ('S1','S2'):
         ### in main() I only want to do the plots
-        DUTs = get_DUTs_from_dictionary(info_df)
+        DUTs = get_DUTs_from_dictionary(info_df,S)
         if not DUTs:
             continue
-
-        analysis_batch(this_batch, dict_of_batches[this_batch], S, n_DUT=DUTs, do_plots=True, SAVE=SAVE, CFD_comparison=CFD_comparison, fit_charge=fit_charge, return_results=False)
+        analysis_batch(this_batch, dict_of_batches[this_batch], S, n_DUT=DUTs, do_plots=True, show_plot=show_plot, SAVE=SAVE, CFD_comparison=CFD_comparison, fit_charge=fit_charge, return_results=False)
 
 ### I need a main() function so I can import it as a module and call the analysis_batch()
 if __name__ == "__main__":
-    main()
+    main(sys.argv)
