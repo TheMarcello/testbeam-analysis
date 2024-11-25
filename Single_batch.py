@@ -41,7 +41,8 @@ def analysis_batch(this_batch, batch_object, S, n_DUT=None, do_plots=True, show_
         os.mkdir(dir_path)
     start = time.time()
 
-    ### show all information about the batch
+
+    ### setting all the options for the batch
     binning_method = 'rice'
     threshold_charge = 4 #fC
     eff_lim = (0.4,1)
@@ -49,14 +50,16 @@ def analysis_batch(this_batch, batch_object, S, n_DUT=None, do_plots=True, show_
     n_bootstrap = False
     my_transimpedance = 4700 #4700 or 10700   ### I PUT THE TRANSIMPEDANCE TO 4700 MANUALLY
     these_bins = bins_dict[this_batch] #bins1    ### custom bins around the sensors
-
+    ### the pulseHeight cut of these batches failed too often
     if this_batch in [502, 601, 602, 603, 604, 605, 901, 902, 1001, 1002]:
         use_for_geometry_cut = 'time'
     else:
         use_for_geometry_cut = 'pulseheight' 
-    ### I could print this info into the logs
-    logging.info(f"in analysis_batch(), analysing Batch: {this_batch}, {S}")
+    logging.info(f"in analysis_batch(), analysing Batch: {this_batch}, {S}\n/
+                 bins for pulseHeight minimum: {binning_method}, bins for time: {time_bins}, threshold charge: {threshold_charge}fC, bootstrap: {n_bootstrap}")
 
+
+    ### the table has to be generated (in main()), if they don't exist already
     info_df = pd.read_pickle(os.path.join(dir_path,f'table_data_{this_batch}.pickle'))
     if not n_DUT:   DUTs = get_DUTs_from_dictionary(info_df,S)
     else:           DUTs = n_DUT
@@ -72,13 +75,13 @@ def analysis_batch(this_batch, batch_object, S, n_DUT=None, do_plots=True, show_
     results_dictionary = {dut:{'comments':set()} for dut in DUTs}
 ### ALL OF THE CUTS
     ### [ ... if dut in DUTs else None for dut in [1,2,3]], it avoids calculating the cuts for the channels with no dut
-    geo_cuts = [geometry_mask(df[S], DUT_number=dut, bins=these_bins, bins_find_min='rice', use=use_for_geometry_cut)[0] if dut in DUTs else None for dut in [1,2,3]]
-    central_sensor_area_cuts = [geometry_mask(df[S], DUT_number=dut, bins=these_bins, bins_find_min='rice', only_select='center', use=use_for_geometry_cut)[0] if dut in DUTs else None for dut in [1,2,3]]
+    geo_cuts = [geometry_mask(df[S], DUT_number=dut, bins=these_bins, bins_find_min=binning_method, use=use_for_geometry_cut)[0] if dut in DUTs else None for dut in [1,2,3]]
+    central_sensor_area_cuts = [geometry_mask(df[S], DUT_number=dut, bins=these_bins, bins_find_min=binning_method, only_select='center', use=use_for_geometry_cut)[0] if dut in DUTs else None for dut in [1,2,3]]
     time_cuts = [time_mask(df[S], dut, bins=time_bins, mask=geo_cuts[dut-1], n_bootstrap=False, show_plot=False, savefig=os.path.join(dir_path,f'time_plot_with_geo_cuts_{S}_{this_batch}_DUT{dut}.png'))[0] if dut in DUTs else None for dut in [1,2,3]]
     charge_cuts = [df[S][f'charge_{dut}']/my_transimpedance>threshold_charge if dut in DUTs else None for dut in [1,2,3]]
 
     ### I still need pulseHeight cut for the charge fit
-    mins = [find_min_btw_peaks(df[S][f"pulseHeight_{dut}"], bins='rice', show_plot=False) if dut in DUTs else None for dut in [1,2,3]]
+    mins = [find_min_btw_peaks(df[S][f"pulseHeight_{dut}"], bins=binning_method, show_plot=False) if dut in DUTs else None for dut in [1,2,3]]
     ### also check that the pulseHeight is > pedestal + 3*noise
     pulse_noise_cuts = [df[S][f'pulseHeight_{dut}']>(df[S][f"pedestal_{dut}"]+3*df[S][f"noise_{dut}"]) if dut in DUTs else None for dut in [1,2,3]]
     pulse_cuts = [np.logical_and(pulse_noise_cuts[dut-1], df[S][f'pulseHeight_{dut}']>mins[dut-1]) if dut in DUTs else None for dut in [1,2,3]]
@@ -101,8 +104,7 @@ def analysis_batch(this_batch, batch_object, S, n_DUT=None, do_plots=True, show_
         for dut in DUTs:
             np.savetxt(os.path.join(dir_path, f"charge_data_all_cuts_{this_batch}_{S}_{dut}.csv"),
                         df[S][f'charge_{dut}'].loc[all_cuts[dut-1]]/my_transimpedance, delimiter=',')
-            os.chdir(os.path.join(ROOT_fit_dir,'..'))
-            ### THIS IS NOT WORKING ???
+            os.chdir(os.path.join(ROOT_fit_dir,'..')) ### I shouldn't change folder
             run_root_string = f'root -b -q "charge_fit.C({this_batch},\\"{S}\\",{dut})"'
             os.system(run_root_string)
             
@@ -179,8 +181,8 @@ def analysis_batch(this_batch, batch_object, S, n_DUT=None, do_plots=True, show_
             logging.error("in analysis_batch(), charge file not found")
             results_dictionary[dut]['charge'], results_dictionary[dut]['charge_error'] = -1, 0
             results_dictionary[dut]['comments'].add("Charge fit file not found")
-        except:
-            logging.error("in analysis_batch(), unknown error when loading charge fit")
+        except Exception as e:
+            logging.errorf(f"in analysis_batch(), raised error {e} when loading charge fit")
             results_dictionary[dut]['charge'], results_dictionary[dut]['charge_error'] = -1, 0
             results_dictionary[dut]['comments'].add("Charge fit error")
             ### read the results from the file
@@ -204,9 +206,11 @@ def analysis_batch(this_batch, batch_object, S, n_DUT=None, do_plots=True, show_
             logging.error(f"in analysis_batch(), Time fit error")
             results_dictionary[dut]['comments'].add("Time fit error")
             time_resolution, time_res_err = 0, 0
+        
+        results_dictionary[dut]['time_resolution'], results_dictionary[dut]['time_res_err'] = time_resolution, time_res_err
         logging.info(f"in analysis_batch(), Time resolution: {time_resolution:.2f}ps +/- {time_res_err:.2f}ps, (MCP: {MCP_resolution}ps)")
         ### efficiency only calculated with center and time cuts
-        results_dictionary[dut]['efficiency'] = efficiency(df[S][f"charge_{dut}"].loc[np.logical_and(central_sensor_area_cuts[dut-1],time_cuts[dut-1])], threshold=threshold_charge, percentage=False)
+        results_dictionary[dut]['efficiency'],_ = efficiency_error(df[S][f"charge_{dut}"].loc[np.logical_and(central_sensor_area_cuts[dut-1],time_cuts[dut-1])], threshold=threshold_charge)
 
     stop = time.time()
 
