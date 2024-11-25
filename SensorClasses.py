@@ -1,13 +1,12 @@
-import numpy as np # NumPy
-import matplotlib.pylab as plt # Matplotlib plots
-import pandas as pd # Pandas
+# import numpy as np # NumPy
+# import matplotlib.pylab as plt # Matplotlib plots
+# import pandas as pd # Pandas
 import logging
 # import uproot
 # import pickle
 
-# import os # read directories etc.
-from scipy.signal import find_peaks, gaussian
-from scipy.stats import gaussian_kde
+# from scipy.signal import find_peaks, gaussian
+# from scipy.stats import gaussian_kde
 
 NO_BOARD = 'no_board' ### default value for when the board info is missing (might change later)
 
