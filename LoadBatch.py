@@ -472,7 +472,7 @@ def find_min_btw_peaks(data, bins, peak_prominence=None, show_plot=True,
             ### ACTUALLY I SHOULD JUST USE THE ARGMIN/MAX AFTER I FOUND THE TWO PEAKS, NO REASON TO USE find_peaks()
             # local_min, _ = find_peaks(-smoothed_hist[peaks_idx[0]:peaks_idx[1]], prominence=min_prominence)
             local_min = np.argmin(smoothed_hist[peaks_idx[0]:peaks_idx[1]])
-            x_min = bins_centers[local_min[0]+peaks_idx[0]]
+            x_min = bins_centers[local_min+peaks_idx[0]]
             break
         else:    ### if it doesn't work it's because only one peak was found
             logging.debug("Two peaks not found, retrying")
@@ -649,7 +649,7 @@ def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None,
     df:         dataframe containing the 'timeCFD50_0' and 'timeCFD20_dut'
     DUT_number: number of the selected dut for the time_mask filter
     bins:       binning options for the time difference
-    n_bootstrap:  integer or False, iterations to repeat bootstrap resampling
+    n_bootstrap:  integer or False, iterations to repeat bootstrap resampling to get statistical uncertainty 
     CFD_DUT:    constant fraction discriminator for the DUT, possibles are: 20,50,70 (percentage), default=20 # reintroduced
     CFD_MCP:    constant fraction discriminator for the MCP, possibles are: 20,50,70 (percentage), dafault=50
     mask:       boolean array (only one array) to filter events where 'mask' is True (i.e. df['Xtr'].loc[mask[DUT]])
@@ -741,10 +741,9 @@ def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None,
                       'chi2_reduced':chi2_reduced, 'R2_adjusted':R2_adjusted, 'left_base':left_base, 'right_base':right_base} # info 
     
 
-### I want to add time_bins (now 5000)
 def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice', time_bins=5000, n_DUT=None, CFD_values=None, efficiency_lim=None, extra_info=True, info=True, 
         geometry_cut="normal", mask=None, threshold_charge=4, transimpedance=None, use='pulseheight', zoom_to_sensor=False, 
-        fig_ax=None, savefig=False, savefig_path='../various plots', savefig_details='', show_plot=True, fmt='svg', title_position=None,
+        fig_ax=None, savefig=False, savefig_path='../various plots', savefig_details='', show_plot=True, fmt='svg', title = None, title_position=None,
         **kwrd_arg):
     """
     Function to produce the plots \n
@@ -786,6 +785,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
     savefig_details: optional details for the file name (e.g. distinguish cuts)
     show_plot:           boolean option to (not) show the plot (calls 'plt.close(fig)')
     fmt:            format of the file saved ('.jpg', '.svg', '.png' etc.)
+    title:          
     title_position: vertical displacement of the main title in the plot (each plot_type has its own defaults)
 
     Returns
@@ -1105,8 +1105,12 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             '1D_Tracks', '2D_Tracks', 'pulseHeight', '2D_Sensors', '1D_Efficiency', '2D_Efficiency', 'Time_pulseHeight', 'CFD_comparison' """)
             return
     
-    ### why did I even put this here? maybe to avoid duplication, but it seems dumb now
-    fig.suptitle(f"{plot_type}, batch: {batch_object.batch_number} {savefig_details}", fontsize=24, y=title_position)
+    if title is None:
+        fig.suptitle(f"{plot_type}, batch: {batch_object.batch_number} {savefig_details}", fontsize=24, y=title_position)
+    elif title:
+        fig.suptitle(title, fontsize=24, y=title_position)
+    ### if title is False: make no title
+
 
     if savefig: 
         file_name = f"{plot_type}_{batch_object.batch_number}{savefig_details}.{fmt}"
