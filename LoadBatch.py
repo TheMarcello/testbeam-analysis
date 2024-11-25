@@ -356,7 +356,7 @@ def efficiency_error(data, threshold):
     error:      error=variance**0.5; variance=(k+1)*(k+2)/((n+2)*(n+3)) - (k+1)**2/(n+2)**2
 
     """
-    k = sum(data>threshold)+1
+    k = sum(data>threshold)
     n = data.size
     eff = (k+1)/(n+2) ### this is the mean value, most probable value is still k/n
     var = ((k+1)*(k+2)/((n+2)*(n+3)) - (k+1)**2/(n+2)**2 )
@@ -377,7 +377,7 @@ def efficiency_k_n(k,n):
     error:      error=variance**0.5; variance=(k+1)*(k+2)/((n+2)*(n+3)) - (k+1)**2/(n+2)**2
     """
     ### this is the mean value, most probable value is still k/n
-    eff = np.where(np.logical_and(k>0,n>0), (k+1)/(n+2), 0)  ### np.where(condition, x, y) return x if condition==True and y otherwise
+    eff = np.where(np.logical_and(k>0,n>0), (k+1)/(n+2), 0)  ### np.where(condition, x, y) returns x if condition==True and y otherwise
     var = np.where(np.logical_and(k>0,n>0), ((k+1)*(k+2)/((n+2)*(n+3)) - (k+1)**2/(n+2)**2 ), 0)
     return (eff, var**0.5)
 
@@ -403,7 +403,7 @@ def time_limited_kde_evaluate(kde, x_axis):
     return kde.evaluate(x_axis)
 
 ### I can actually try to use np.gradient instead of find_peaks
-def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, show_plot=True,
+def find_min_btw_peaks(data, bins, peak_prominence=None, show_plot=True,
                        savefig=False, savefig_path='../various plots/', savefig_details='', fig_ax=None):
     """
     Finds the minimun between two peaks, using 'find_peaks()' function.
@@ -414,7 +414,7 @@ def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, sh
     bins:           matplot bins options e.g. int (number of bins), list (bin edges), str (method)
                     see https://numpy.org/doc/stable/reference/generated/numpy.histogram_bin_edges.html
     peak_prominence: "height" of the peaks compared to neighbouring data
-    min_prominence:  "depth" of the min compared to neighbouring data
+    # min_prominence:  "depth" of the min compared to neighbouring data [removed]
     show_plot:           boolean, default True, if the plot will to be shown
     savefig:        boolean, if the plot should be saved
     savefig_path:   path of the directory in which to save the plot
@@ -457,7 +457,7 @@ def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, sh
     ### it plots before it tries to find peaks and/or min
     if show_plot:    ax.plot(bins_centers, smoothed_hist, linewidth=1, label='Smoothed hist')
     if not peak_prominence: peak_prominence = np.max(hist)/100
-    if not min_prominence:  min_prominence = np.max(hist)/100
+    # if not min_prominence:  min_prominence = np.max(hist)/100
     recursion_depth = 0  # 0 or 1, not sure which one gives 'max_recursion' tries
     max_recursion = 20 # 10 or 20
 
@@ -470,7 +470,10 @@ def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, sh
 
         if len(peaks_idx)>=2:       ### find the minimum
             ### ACTUALLY I SHOULD JUST USE THE ARGMIN/MAX AFTER I FOUND THE TWO PEAKS, NO REASON TO USE find_peaks()
-            local_min, _ = find_peaks(-smoothed_hist[peaks_idx[0]:peaks_idx[1]], prominence=min_prominence)
+            # local_min, _ = find_peaks(-smoothed_hist[peaks_idx[0]:peaks_idx[1]], prominence=min_prominence)
+            local_min = np.argmin(smoothed_hist[peaks_idx[0]:peaks_idx[1]])
+            x_min = bins_centers[local_min[0]+peaks_idx[0]]
+            break
         else:    ### if it doesn't work it's because only one peak was found
             logging.debug("Two peaks not found, retrying")
             recursion_depth += 1
@@ -480,22 +483,21 @@ def find_min_btw_peaks(data, bins, peak_prominence=None, min_prominence=None, sh
                 return None
             peak_prominence *= 0.5    ### reduce prominence if the peaks are not found
             continue
-        if len(local_min)==1:   break
+        # if len(local_min)==1:   break
 
-        elif len(local_min)>1:
-            logging.warning(f"More than one minimum found at: {[bins_centers[min_idx+peaks_idx[0]] for min_idx in local_min]}")
-            break
-        elif len(local_min)==0:
-            recursion_depth += 1
-            if recursion_depth==max_recursion:
-                logging.warning(f"No MIN found after {recursion_depth} iterations")
-                return None
-            min_prominence *= 0.5       ### reduce prominence if the min is not found
+        # elif len(local_min)>1:
+        #     logging.warning(f"More than one minimum found at: {[bins_centers[min_idx+peaks_idx[0]] for min_idx in local_min]}")
+        #     break
+        # elif len(local_min)==0:
+        #     recursion_depth += 1
+        #     if recursion_depth==max_recursion:
+        #         logging.warning(f"No MIN found after {recursion_depth} iterations")
+        #         return None
+        #     min_prominence *= 0.5       ### reduce prominence if the min is not found
 
-    x_min = bins_centers[local_min[0]+peaks_idx[0]]
     if show_plot:
         ax.plot(bins_centers[peaks_idx], smoothed_hist[peaks_idx], 'x', markersize=10, color='k', label='Peaks')
-        ax.plot(x_min, smoothed_hist[local_min[0]+peaks_idx[0]], 'o', markersize=10, color='r',
+        ax.plot(x_min, smoothed_hist[local_min+peaks_idx[0]], 'o', markersize=10, color='r',
                 label='Mimimum: %.1f'%x_min, alpha=.7)
         ax.legend(fontsize=16)
         if savefig: fig.savefig(f"{savefig_path}find_min_btw_peaks{savefig_details}.svg")
@@ -889,7 +891,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             else:       fig, axes = plt.subplots(figsize=(8*len(n_DUT),8), ncols=len(n_DUT), dpi=300, subplot_kw={'projection':'scatter_density'}) 
             xlim = (-8e3,-3e3)
             if bins is None: bins = 10000  ### default binning
-            axes = np.atleast_1d(axes) ### for simplicity, so I can use axes[i] for a single DUT  ### for simplicity, so I can use axes[i] for a single DUT 
+            axes = np.atleast_1d(axes) ### for simplicity, so I can use axes[i] for a single DUT
 
             for i,dut in enumerate(n_DUT):
                 if mask:
