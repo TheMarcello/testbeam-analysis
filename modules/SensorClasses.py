@@ -2,11 +2,7 @@
 # import matplotlib.pylab as plt # Matplotlib plots
 # import pandas as pd # Pandas
 import logging
-# import uproot
-# import pickle
 
-# from scipy.signal import find_peaks, gaussian
-# from scipy.stats import gaussian_kde
 
 NO_BOARD = 'no_board' ### default value for when the board info is missing (might change later)
 
@@ -80,16 +76,11 @@ class Batch:
 
     set_fluence_boards():   sets board names and fluences (only for __init__)
     """
-    ### maybe I can put: temperatue (as average of all temperatures)
-    ###                  tempA and tempB a list of all the temperatures for each run
     def __init__(self, batch_number, angle, humidity, temperature_avg, S1, S2):#):
         self.batch_number = batch_number
         self.angle = angle
         self.humidity = humidity
         self.temperature = temperature_avg
-        # self.runs = runs
-        # self.tempA = temperatureA
-        # self.tempB = temperatureB
         self.S = {'S1':S1, 'S2':S2} ### this is a bit overly nested but it's useful for a loop like: "S in ['S1','S2']:"
         self.set_fluence_boards()
         self.set_transimpedance()
@@ -106,7 +97,7 @@ class Batch:
         for S,scope in self.S.items():
                ### default to zero because most of them are unirradiated and not angled
             fluences = (0, 0, 0, 0)     
-            # angles = (0, 0, 0, 0)     ### I am not keeping this because it's inconsistent, I keep the RUNLOG angles
+            # angles = (0, 0, 0, 0)     ### I am not using this because it's inconsistent, I keep the RUNLOG angles
             if batch>=100 and batch<200:     ### Ch2      Ch3       Ch4
                 if S=="S1":     boards = (none, 'CERN-1','CERN-1','CERN-1')
                 elif S=="S2":   boards = (none, 'JSI-B14', 'JSI-B12', 'CERN-1')
