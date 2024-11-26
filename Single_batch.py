@@ -26,15 +26,38 @@ from LoadBatch import *
 from SensorClasses import *
 
 
-def analysis_batch(this_batch, batch_object, S, n_DUT=None, do_plots=True, show_plot=False, SAVE=True, CFD_comparison=False, fit_charge=False, return_results=True, dir_path=None, ROOT_fit_dir=None):
+def analysis_batch(this_batch, batch_object, S, n_DUT=None, do_plots=True, show_plot=False, SAVE=True, CFD_comparison=False, fit_charge=False, return_results=True, dir_path=None, ROOT_fit_dir=None, Charge_fit_results="Charge_fit_results"):
     """
-    Performs analysis 
-    
+    Performs analysis of one batch: one (or more) duts in a single oscilloscope. Plots a lot of different quantities and performs some fits.
+    Also returns a dictionary with all the calculations performed. \n
+    Arguments
+    ---------
+    this_batch:     batch number
+    batch_object:   batch object (see class Batch in SensorClasses.py)
+    S:              oscilloscope name (either 'S1' or 'S2')
+    n_DUT:          number of devices under test (3 for each oscilloscope for May 2023)
+    do_plots:       boolean option to create the plots (not necessary to obtain the results)
+    show_plot:      boolean option to show the plots, could raise warnings for too many figures open (they can be saved if this is false)
+    SAVE:           boolean option to save the plots
+    CFD_comparison: 3x3 plot of delta_t distributions with different CFD values for the dut and MCP, to compare them
+    fit_charge:     boolean option to call charge_fit.C to perform the Langau*Gauss fit of the charge, if False the results are read from files saved previously
+    return_results: boolean option to return a dictionary of results ### right now this is not useful because the dictionary is created anyways
+    dir_path:       path to save all the plots, if not
+    ROOT_fit_dir:   path to the folder of the charge_fit.C file (which performs the fit using ROOT)
+
+    Returns
+    -------
+    results_dictionary:     dictionary of a dictionary of the results, structure:
+        {<dut_number>:  {'name':'sensor_name', 
+                'board':'board_mounted', 
+                'voltage':<voltage_value>,
+                'comments':{'Time fit error'},
+                'etc':'other_info'}}
     """
     
     ### I want to keep this specific directory for many reasons (fit charge, all plots etc.)
     if dir_path is None:    dir_path = f'/home/marcello/Desktop/Radboud_not_synchro/Master_Thesis/various plots/all batches/{this_batch}'
-    if ROOT_fit_dir is None:    ROOT_fit_dir = f"/home/marcello/Desktop/Radboud_not_synchro/Master_Thesis/testbeam-analysis/ROOT_Langaus_fit/Charge_fit_results"
+    if ROOT_fit_dir is None:    ROOT_fit_dir = f"/home/marcello/Desktop/Radboud_not_synchro/Master_Thesis/testbeam-analysis/ROOT_Langaus_fit/"
 
     if not os.path.exists(dir_path):
         logging.warning(f"in analysis_batch(), the path: {dir_path} does not exist, creating directory")
@@ -69,6 +92,7 @@ def analysis_batch(this_batch, batch_object, S, n_DUT=None, do_plots=True, show_
     
     df = {}  ### having a dictionary in this function is now useless (only one S at a time) but changing everything is not worth the risk
     df[S] = load_batch(this_batch,S)
+    ### I can add a check to make sure that batch_object and this_batch are from the same batch
     logging.info(f'MCP: {batch_object.S[S].channels["Ch1"].voltage} V, angle: {batch_object.angle}°, temperature: {batch_object.temperature:.2f}°C')
     
     ### initilizing the dictionary for the results:
@@ -104,7 +128,7 @@ def analysis_batch(this_batch, batch_object, S, n_DUT=None, do_plots=True, show_
         for dut in DUTs:
             np.savetxt(os.path.join(dir_path, f"charge_data_all_cuts_{this_batch}_{S}_{dut}.csv"),
                         df[S][f'charge_{dut}'].loc[all_cuts[dut-1]]/my_transimpedance, delimiter=',')
-            os.chdir(os.path.join(ROOT_fit_dir,'..')) ### I shouldn't change folder
+            # os.chdir(os.path.join(ROOT_fit_dir,'..')) ### I shouldn't change folder
             run_root_string = f'root -b -q "charge_fit.C({this_batch},\\"{S}\\",{dut})"'
             os.system(run_root_string)
             
@@ -174,7 +198,7 @@ def analysis_batch(this_batch, batch_object, S, n_DUT=None, do_plots=True, show_
         results_dictionary[dut]['temperature'] = batch_object.temperature
         try:
             charge_fit_file = f"charge_fit_results_{this_batch}_{S}_{dut}.csv"
-            charge_fit_df = pd.read_csv(os.path.join(ROOT_fit_dir,charge_fit_file), skiprows=1)
+            charge_fit_df = pd.read_csv(os.path.join(ROOT_fit_dir,Charge_fit_results,charge_fit_file), skiprows=1)
             results_dictionary[dut]['charge'] = charge_fit_df["MPV"].iloc[0]
             results_dictionary[dut]['charge_error'] = charge_fit_df["MPV_error"].iloc[0]
         except FileNotFoundError:
