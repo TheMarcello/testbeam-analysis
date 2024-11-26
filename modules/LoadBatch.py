@@ -1,7 +1,6 @@
 import numpy as np # NumPy
 import matplotlib.pylab as plt # Matplotlib plots
 import matplotlib.colors as colors
-# import matplotlib.patches as mpatches
 from matplotlib.patches import Rectangle
 # import mpl_scatter_density
 import pandas as pd # Pandas
@@ -10,15 +9,13 @@ import pickle
 import logging
 
 import awkward as ak
-# import mplhep as hep
-# import argparse     # to get arguments from command line executing file.py
+
 import os # read directories etc.
-from scipy.signal import find_peaks, gaussian
+from scipy.signal import find_peaks
 from scipy.optimize import curve_fit
 from scipy.stats import gaussian_kde
 import pylandau
-# import re
-# import copy
+
 from wrapt_timeout_decorator import timeout
 
 from SensorClasses import *
@@ -763,7 +760,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
     this_scope:     oscilloscope name (either 'S1' or 'S2')
     bins:           binning options, (int,int) or (bin_edges_list, bin_edges_list), different default for each plot_type
     bins_find_min:  binning options for the find_min_btw_peaks function (in '2D_Sensors')  
-    n_DUT:          number of devices under test (3 for each Scope for May 2023)
+    n_DUT:          number of devices under test (3 for each oscilloscope for May 2023)
     efficiency_lim: limit of the y axis for 1D efficiency plot
     extra_info:     boolean option to have extra information on the plot        ### now only for 'Time_pulseHeight' but could be more generally useful 
     info:           boolean option for standard information 
