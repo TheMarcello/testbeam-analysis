@@ -174,7 +174,7 @@ class Batch:
                     boards = (none, none, 'JSI B2', none)
                     fluences = (0, 0, '2.00E+14', 0)
             else:     ### last case, return all none
-                logging.error(f"Batch:{batch} does not have any board names assigned")
+                logging.error(f"in set_fluence_boards(), Batch:{batch} does not have any board names assigned")
                 if S=="S1": boards = (none, none, none, none)
                 elif S=="S2":   boards =(none, none, none, none)
             
@@ -184,7 +184,7 @@ class Batch:
                 scope.channels['Ch1'].fluence, scope.channels['Ch2'].fluence, \
                             scope.channels['Ch3'].fluence, scope.channels['Ch4'].fluence = fluences 
             else:
-                logging.error(f"No oscilloscope provided in initialization of {S} in batch {self.batch_number}, boards and fluence NOT set")
+                logging.warning(f"in set_fluence_boards(), (at least) one oscilloscope NOT provided in initialization of {S} in batch {self.batch_number}, boards and fluence NOT set")
             
             
     def set_transimpedance(self): ### move it after set_fluence_boards() afterwards
