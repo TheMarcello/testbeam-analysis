@@ -18,8 +18,8 @@ import pylandau
 
 from wrapt_timeout_decorator import timeout
 
-from SensorClasses import *
-
+from .SensorClasses import Batch, Sensor, Oscilloscope
+# print("in loadbatch, __package__==",  __package__)
 
 PIXEL_SIZE = 0.0184 #mm
 
@@ -596,8 +596,8 @@ def geometry_mask(df, DUT_number, bins, bins_find_min='rice', only_select="norma
         Ytr_cut = df[f"Ytr_{dut-1}"].loc[my_filter]
         left_edge, right_edge = find_edges(Xtr_cut, bins=bins[0], use_kde=True)
         bottom_edge, top_edge = find_edges(Ytr_cut, bins=bins[1], use_kde=True)
-    except:
-        logging.error("in 'geometry_mask()', something wrong, no boolean mask")
+    except Exception as e:
+        logging.error(f"in 'geometry_mask()', raised exception {e}, no boolean mask and no dict")
         return pd.Series(True, index=df.index), {}  ### return all True array if there is no minimum
     match only_select:
         case "center":
@@ -898,7 +898,17 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                     time_array = np.array(df[f'timeCFD20_{dut}']-df[f'timeCFD50_0'])
                     pulseheight_array = np.array(df[f'pulseHeight_{dut}'])
 
-                ### I am starting to think that this part should not be here at all
+                axes[i].set_xlabel(f"$\Delta t$ [ps] (DUT {dut} - MCP)", fontsize=16)
+                axes[i].set_ylabel(f"PulseHeight [mV]", fontsize=16)
+                axes[i].grid('--')
+                plot_title = f"DUT: {batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
+                axes[i].set_title(plot_title, fontsize=16)
+
+                im = axes[i].scatter_density(time_array, pulseheight_array, cmap='Blues', norm=colors.LogNorm(vmin=1e-2, vmax=1e3, clip=True))
+                axes[i].set_xlim(xlim)
+                ylim = axes[i].get_ylim()
+                axes[i].set_ylim(ylim[0],ylim[1]*1.1)  ### to leave space for the legend
+
                 ### only calculate pulseheight and time cut if asked
                 if info==True:
                     pulse_cut = find_min_btw_peaks(df[f"pulseHeight_{dut}"], bins=bins_find_min, show_plot=False)
@@ -913,26 +923,15 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                         axes[i].axvline(right_base, color='g', alpha=.9)
                         axes[i].legend(fontsize=16, loc='best', framealpha=0) ### only show legend if there is something inside
 
-                axes[i].set_xlabel(f"$\Delta t$ [ps] (DUT {dut} - MCP)", fontsize=16)
-                axes[i].set_ylabel(f"PulseHeight [mV]", fontsize=16)
-                axes[i].grid('--')
-                plot_title = f"DUT: {batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
-                axes[i].set_title(plot_title, fontsize=16)
+                    if extra_info and time_info is not None:
+                        total = len(time_array)/100  ### so I get percentage directly
+                        axes[i].annotate(f"%.3f"%(len(time_array[np.logical_and(time_array<left_base, pulseheight_array<pulse_cut)])/total)+"%", ((xlim[0]+left_base)/2, (2*ylim[0]+pulse_cut)/3), fontsize=16)
+                        axes[i].annotate(f"%.3f"%(len(time_array[np.logical_and(time_array>right_base, pulseheight_array<pulse_cut)])/total)+"%", ((right_base+xlim[1])/2, (2*ylim[0]+pulse_cut)/3), fontsize=16)
+                        axes[i].annotate(f"%.3f"%(len(time_array[np.logical_and(np.logical_and(time_array>left_base, time_array<right_base), pulseheight_array<pulse_cut)])/total)+"%", ((right_base+left_base)/2, (ylim[0]+pulse_cut)/2), fontsize=16)
 
-                im = axes[i].scatter_density(time_array, pulseheight_array, cmap='Blues', norm=colors.LogNorm(vmin=1e-2, vmax=1e3, clip=True))
-                axes[i].set_xlim(xlim)
-                ylim = axes[i].get_ylim()
-                axes[i].set_ylim(ylim[0],ylim[1]*1.1)  ### to leave space for the legend
-
-                if extra_info and time_info is not None:
-                    total = len(time_array)/100  ### so I get percentage directly
-                    axes[i].annotate(f"%.3f"%(len(time_array[np.logical_and(time_array<left_base, pulseheight_array<pulse_cut)])/total)+"%", ((xlim[0]+left_base)/2, (2*ylim[0]+pulse_cut)/3), fontsize=16)
-                    axes[i].annotate(f"%.3f"%(len(time_array[np.logical_and(time_array>right_base, pulseheight_array<pulse_cut)])/total)+"%", ((right_base+xlim[1])/2, (2*ylim[0]+pulse_cut)/3), fontsize=16)
-                    axes[i].annotate(f"%.3f"%(len(time_array[np.logical_and(np.logical_and(time_array>left_base, time_array<right_base), pulseheight_array<pulse_cut)])/total)+"%", ((right_base+left_base)/2, (ylim[0]+pulse_cut)/2), fontsize=16)
-
-                    axes[i].annotate(f"%.3f"%(len(time_array[np.logical_and(time_array<left_base, pulseheight_array>pulse_cut)])/total)+"%", ((xlim[0]+left_base)/2, (pulse_cut+ylim[1])/2), fontsize=16)
-                    axes[i].annotate(f"%.3f"%(len(time_array[np.logical_and(time_array>right_base, pulseheight_array>pulse_cut)])/total)+"%", ((right_base+xlim[1])/2, (pulse_cut+ylim[1])/2+20), fontsize=16)
-                    axes[i].annotate(f"%.3f"%(len(time_array[np.logical_and(np.logical_and(time_array>left_base, time_array<right_base), pulseheight_array>pulse_cut)])/total)+"%", ((right_base+left_base)/2, (pulse_cut+ylim[1])/2+50), fontsize=16)
+                        axes[i].annotate(f"%.3f"%(len(time_array[np.logical_and(time_array<left_base, pulseheight_array>pulse_cut)])/total)+"%", ((xlim[0]+left_base)/2, (pulse_cut+ylim[1])/2), fontsize=16)
+                        axes[i].annotate(f"%.3f"%(len(time_array[np.logical_and(time_array>right_base, pulseheight_array>pulse_cut)])/total)+"%", ((right_base+xlim[1])/2, (pulse_cut+ylim[1])/2+20), fontsize=16)
+                        axes[i].annotate(f"%.3f"%(len(time_array[np.logical_and(np.logical_and(time_array>left_base, time_array<right_base), pulseheight_array>pulse_cut)])/total)+"%", ((right_base+left_base)/2, (pulse_cut+ylim[1])/2+50), fontsize=16)
 
             for ax in axes:
                 ax.sharey(axes[0])
