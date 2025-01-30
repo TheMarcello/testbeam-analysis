@@ -40,12 +40,15 @@ class Oscilloscope:
     add_sensor:     add a Sensor to the specified channel
     get_sensor:     get a Sensor from the specified channel
     """
-    def __init__(self, name, runs, temperatureA, temperatureB, sensor1=Sensor(), sensor2=Sensor(), sensor3=Sensor(), sensor4=Sensor()):
+    def __init__(self, name, runs, temperatureA=None, temperatureB=None, sensor1=None, sensor2=None, sensor3=None, sensor4=None):
         self.name = name
-        self.channels = {'Ch1':sensor1, 'Ch2':sensor2, 'Ch3':sensor3, 'Ch4':sensor4}
+        self.channels = {'Ch1':sensor1 if sensor1 else Sensor(),
+                         'Ch2':sensor2 if sensor2 else Sensor(),
+                         'Ch3':sensor3 if sensor3 else Sensor(),
+                         'Ch4':sensor4 if sensor4 else Sensor()}
         self.runs = runs
-        self.tempA = temperatureA
-        self.tempB = temperatureB
+        self.tempA = temperatureA if temperatureA is not None else []
+        self.tempB = temperatureB if temperatureB is not None else []
 
     def add_sensor(self, channel, sensor):
         self.channels[channel] = sensor
@@ -76,12 +79,13 @@ class Batch:
 
     set_fluence_boards():   sets board names and fluences (only for __init__)
     """
-    def __init__(self, batch_number, angle, humidity, temperature_avg, S1, S2):#):
+    def __init__(self, batch_number, angle=0, humidity=0, temperature_avg=0, S1=None, S2=None):#):
         self.batch_number = batch_number
         self.angle = angle
         self.humidity = humidity
         self.temperature = temperature_avg
-        self.S = {'S1':S1, 'S2':S2} ### this is a bit overly nested but it's useful for a loop like: "S in ['S1','S2']:"
+        self.S = {'S1':S1 if S1 else Oscilloscope('S1', []),    ### this is a bit overly nested but it's useful for a loop like: "S in ['S1','S2']:"
+                  'S2':S2 if S2 else Oscilloscope('S2', [])} 
         self.set_fluence_boards()
         self.set_transimpedance()
 
@@ -174,7 +178,7 @@ class Batch:
                     boards = (none, none, 'JSI B2', none)
                     fluences = (0, 0, '2.00E+14', 0)
             else:     ### last case, return all none
-                logging.error(f"in set_fluence_boards(), Batch:{batch} does not have any board names assigned")
+                logging.warning(f"in set_fluence_boards(), Batch:{batch} does not have any board names assigned")
                 if S=="S1": boards = (none, none, none, none)
                 elif S=="S2":   boards =(none, none, none, none)
             
