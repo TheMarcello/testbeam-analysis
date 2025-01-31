@@ -255,7 +255,7 @@ void charge_fit(int batch, const char* oscilloscope, int dut) {
    for (int i=0; i<size; i++) ones.push_back(1);
 
    int n_bins = 100;
-   TH1F *hSNR = new TH1F("charge fit","Charge with Langau fit",n_bins,-5,150);
+   TH1F *hSNR = new TH1F("charge fit","Charge with Langau fit",n_bins,-5,200);
 
    hSNR->FillN(size,charge.data(),ones.data());
 
@@ -266,13 +266,14 @@ void charge_fit(int batch, const char* oscilloscope, int dut) {
    double fr[2];
    double sv[4], pllo[4], plhi[4], fp[4], fpe[4];
    // start the fit from 4fC because it's the limit for the electronics
+   // fr[0] = 4;
    fr[0] = 4;
-   // fr[1] = 300;
+   fr[1] = 200;
    // fr[0] = 0.3*hSNR->GetMean();
-   fr[1] = 5.0*hSNR->GetMean();
+   // fr[1] = 5.0*hSNR->GetMean();
 
-   pllo[0]=0.5; pllo[1]=2.0; pllo[2]=1.0; pllo[3]=0.4;
-   plhi[0]=5.0; plhi[1]=50.0; plhi[2]=1000000.0; plhi[3]=5.0;
+   pllo[0]=0.2; pllo[1]=2.0; pllo[2]=1.0; pllo[3]=0.4;
+   plhi[0]=15; plhi[1]=60.0; plhi[2]=1000000.0; plhi[3]=30.0; // increased limits of fit parameters
    sv[0]=1.8; sv[1]=20.0; sv[2]=50000.0; sv[3]=3.0;
 
    double chisqr;
