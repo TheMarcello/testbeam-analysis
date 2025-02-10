@@ -1,6 +1,6 @@
 ### can be run individually with:
 ### python3 -m modules.SingleBatch --batch <_c> 
-### optional flags: --SAVE, --show_plots, --fit_charge, --CFD_matrix
+### optional flags: --SAVE, --show_plots, --fit_charge, --CFD_matrix, --new_results
 ### warning: --show_plots plots are distorted
 
 import numpy as np # NumPy
@@ -24,7 +24,7 @@ from .LoadBatch import *
 from .SensorClasses import Batch, Sensor, Oscilloscope
 
 
-def analysis_batch(this_batch, batch_object, S, n_DUT=None, do_plots=True, show_plot=False, SAVE=True, CFD_comparison=False, fit_charge=False, only_center=True, return_results=True, dir_path=None, ROOT_fit_dir=None, Charge_fit_results="Charge_fit_results"):
+def analysis_batch(this_batch, batch_object, S, n_DUT=None, CFD_comparison=False, do_plots=True, fit_charge=False, new_results=False, only_center=True, SAVE=True, show_plot=False, time_bins=5000, time_bins_fine=100, results_name="Results_dictionary.pickle", results_path=None, return_results=True, dir_path=None, ROOT_fit_dir=None):
     """
     Performs analysis of one batch: one (or more) duts in a single oscilloscope. Plots a lot of different quantities and performs some fits.
     Also returns a dictionary with all the calculations performed. \n
@@ -34,16 +34,20 @@ def analysis_batch(this_batch, batch_object, S, n_DUT=None, do_plots=True, show_
     batch_object:   batch object (see class Batch in SensorClasses.py)
     S:              oscilloscope name (either 'S1' or 'S2')
     n_DUT:          number of devices under test (3 for each oscilloscope for May 2023)
-    do_plots:       boolean option to create the plots (not necessary to obtain the results)
-    show_plot:      boolean option to show the plots, could raise warnings for too many figures open (they can be saved if this is false)
-    SAVE:           boolean option to save the plots
     CFD_comparison: 3x3 plot of delta_t distributions with different CFD values for the dut and MCP, to compare them
-    CFD_DUT:        change the Constant Fraction Discriminator values for the DUT (default 20%)
+    do_plots:       boolean option to create the plots (not necessary to obtain the results)
     fit_charge:     boolean option to call charge_fit.C to perform the Langau*Gauss fit of the charge, if False the results are read from files saved previously
+    new_results:    boolean option to replace the old results with newly calculated ones
+    only_center:    use only the central area (0.5x0.5mm^2) to calculate the time resolution
+    SAVE:           boolean option to save the plots
+    show_plot:      boolean option to show the plots, could raise warnings for too many figures open (they can be saved if this is false)
+    time_bins:      number of bins for the plots of gaussian fit
+    time_bins_fine: number of bins for calculating the time resolution (after cuts)
+    results_name:   name of the picke file with the previous results
+    results_path:   path to the directory containing the pickle file (if existing) with the previous results, to be loaded and updated (if new_results==True)
     return_results: boolean option to return a dictionary of results ### right now this is not useful because the dictionary is created anyways
     dir_path:       path to save all the plots, if not
     ROOT_fit_dir:   path to the folder of the charge_fit.C file (which performs the fit using ROOT)
-
     Returns
     -------
     results_dictionary:     dictionary of a dictionary of the results, structure:
@@ -55,6 +59,7 @@ def analysis_batch(this_batch, batch_object, S, n_DUT=None, do_plots=True, show_
     """
     
     ### I want to keep this specific directory for many reasons (fit charge, all plots etc.)
+    if results_path is None:    results_path = "/home/marcello/Desktop/Radboud_not_synchro/Master_Thesis/testbeam-analysis/files/"
     if dir_path is None:    dir_path = f'/home/marcello/Desktop/Radboud_not_synchro/Master_Thesis/various plots/all batches/{this_batch}'
     if ROOT_fit_dir is None:    ROOT_fit_dir = f"/home/marcello/Desktop/Radboud_not_synchro/Master_Thesis/testbeam-analysis/ROOT_Langaus_fit/"
 
@@ -68,16 +73,16 @@ def analysis_batch(this_batch, batch_object, S, n_DUT=None, do_plots=True, show_
     binning_method = 'rice'
     threshold_charge = 4 #fC
     eff_lim = (0.4,1)
-    time_bins = 4000
+    # time_bins = 5000 ### maybe 5000 instead of 4000?
     n_bootstrap = False
     my_transimpedance = 4700 #4700 or 10700   ### I PUT THE TRANSIMPEDANCE TO 4700 MANUALLY
     these_bins = bins_dict[this_batch] #bins1    ### custom bins around the sensors
     ### the pulseHeight cut of these batches failed too often
-    if this_batch in [502, 601, 602, 603, 604, 605, 901, 902, 1001, 1002]:
+    if this_batch in [502, 505, 601, 602, 603, 604, 605, 901, 902, 1001, 1002]:
         use_for_geometry_cut = 'time'
     else:
         use_for_geometry_cut = 'pulseheight' 
-    logging.info(f"in analysis_batch(), analysing Batch: {this_batch}, {S}\n bins for pulseHeight minimum: {binning_method}, bins for time: {time_bins}, threshold charge: {threshold_charge}fC, bootstrap: {n_bootstrap}")
+    logging.info(f"in analysis_batch(), analysing Batch: {this_batch}, {S}\n bins for pulseHeight minimum: {binning_method}, bins for time plots: {time_bins}, bins for time resolution: {time_bins_fine} threshold charge: {threshold_charge}fC, bootstrap: {n_bootstrap}")
 
 
     ### the table has to be generated (in main()), if they don't exist already
@@ -95,8 +100,6 @@ def analysis_batch(this_batch, batch_object, S, n_DUT=None, do_plots=True, show_
         logging.error(f"In analysis_batch(), batch_number: {batch_object.batch_number} and this_batch: {this_batch} DO NOT MATCH")
     logging.info(f'MCP: {batch_object.S[S].channels["Ch1"].voltage} V, angle: {batch_object.angle}°, temperature: {batch_object.temperature:.2f}°C')
     
-    ### initilizing the dictionary for the results:
-    results_dictionary = {dut:{'comments':set()} for dut in DUTs}
 ### ALL OF THE CUTS
     ### [ ... if dut in DUTs else None for dut in [1,2,3]]  avoids calculating the cuts for the channels with no dut
     geo_cuts = [geometry_mask(df[S], DUT_number=dut, bins=these_bins, bins_find_min=binning_method, use=use_for_geometry_cut)[0] if dut in DUTs else None for dut in [1,2,3]]
@@ -172,83 +175,99 @@ def analysis_batch(this_batch, batch_object, S, n_DUT=None, do_plots=True, show_
     ### CFD values comparison with normal geo cuts
         CFD_mask = [np.logical_and(time_fit_cuts[dut-1], geo_cuts[dut-1]) if dut in DUTs else None for dut in [1,2,3]]
         for dut in DUTs:
-            fig, _ = plot(df[S], 'CFD_comparison', batch_object, S, n_DUT=dut, CFD_values=CFD_values, mask=CFD_mask, time_bins=100,
+            fig, _ = plot(df[S], 'CFD_comparison', batch_object, S, n_DUT=dut, CFD_values=CFD_values, mask=CFD_mask, time_bins=time_bins_fine,
                     savefig=SAVE, savefig_path=dir_path, savefig_details=f" geo cuts",fmt='png')
             plt.close(fig)
     ### CFD values comparison with central area cuts (less statistics)
         CFD_mask = [np.logical_and(time_fit_cuts[dut-1], central_sensor_area_cuts[dut-1]) if dut in DUTs else None for dut in [1,2,3]]
         for dut in DUTs:
-            fig, _ = plot(df[S], 'CFD_comparison', batch_object, S, n_DUT=dut, CFD_values=CFD_values, mask=CFD_mask, time_bins=100,
+            fig, _ = plot(df[S], 'CFD_comparison', batch_object, S, n_DUT=dut, CFD_values=CFD_values, mask=CFD_mask, time_bins=time_bins_fine,
                     savefig=SAVE, savefig_path=dir_path, savefig_details=f" central area cuts",fmt='png')
             plt.close(fig)
 
-    for dut in DUTs:
-        ch = f'Ch{dut+1}'
-        results_dictionary[dut]['name'] = batch_object.S[S].get_sensor(ch).name
-        results_dictionary[dut]['board'] = batch_object.S[S].get_sensor(ch).board
-        results_dictionary[dut]['voltage'] = batch_object.S[S].get_sensor(ch).voltage
-        results_dictionary[dut]['current'] = batch_object.S[S].get_sensor(ch).current
-        results_dictionary[dut]['fluence'] = batch_object.S[S].get_sensor(ch).fluence
-        results_dictionary[dut]['MCP_voltage'] = batch_object.S[S].get_sensor('Ch1').voltage
-        MCP_voltage = batch_object.S[S].get_sensor('Ch1').voltage
-        results_dictionary[dut]['temp_A'] = batch_object.S[S].tempA
-        results_dictionary[dut]['temp_B'] = batch_object.S[S].tempB
-        results_dictionary[dut]['angle'] = batch_object.angle
-        results_dictionary[dut]['humidity'] = batch_object.humidity
-        results_dictionary[dut]['temperature'] = batch_object.temperature
-        try:
-            charge_fit_file = f"charge_fit_results_{this_batch}_{S}_{dut}.csv"
-            charge_fit_df = pd.read_csv(os.path.join(ROOT_fit_dir,Charge_fit_results,charge_fit_file), skiprows=1)
-            results_dictionary[dut]['charge'] = charge_fit_df["MPV"].iloc[0]
-            results_dictionary[dut]['charge_error'] = charge_fit_df["MPV_error"].iloc[0]
-        except FileNotFoundError:
-            logging.error("in analysis_batch(), charge file not found")
-            results_dictionary[dut]['charge'], results_dictionary[dut]['charge_error'] = -1, 0
-            results_dictionary[dut]['comments'].add("Charge fit file not found")
-        except Exception as e:
-            logging.errorf(f"in analysis_batch(), raised error {e} when loading charge fit")
-            results_dictionary[dut]['charge'], results_dictionary[dut]['charge_error'] = -1, 0
-            results_dictionary[dut]['comments'].add("Charge fit error")
-            ### read the results from the file
-        match MCP_voltage:  ### matche the MCP voltage to its time resolution
-            case 2500: 
-                MCP_resolution, MCP_error = 36.52, 0.81  # 36.52 +/- 0.81 ps
-            case 2600: 
-                MCP_resolution, MCP_error = 16.48, 0.57  # 16.48 +/- 0.57 ps
-            case 2800: 
-                MCP_resolution, MCP_error = 3.73, 1.33   # 3.73 +/- 1.33 ps
-            case other: logging.error(f"in analysis_batch(), incorrect MCP voltage: {other}")
-        try:
-            ### for all sensors that are irradiated set CFD for the DUT to 70%
-            if results_dictionary[dut]['fluence'] != 0:         CFD_DUT = 70
-            elif results_dictionary[dut]['fluence'] == 0:       CFD_DUT = 20
-            else:        logging.error(f"Value of fluence not recognized:{results_dictionary[dut]['fluence']}, unable to set CFD value")
-            ### option to make the geometrical cut be only the central 0.5xo.5mm^2 OR the full surface of the dut
-            if only_center: 
-                this_mask = np.logical_and(central_sensor_area_cuts[dut-1], time_fit_cuts[dut-1])
-            else:
-                this_mask = np.logical_and(geo_cuts[dut-1],time_fit_cuts[dut-1])
+    try:
+        results_dictionary = read_pickle(os.path.join(results_path, results_name))
+    except FileNotFoundError:
+        logging.warning(f"The file {results_name} does not exist, creating a new dictionary")
+        ### initilizing the dictionary for the results:
+        results_dictionary = {dut:{'comments':set()} for dut in DUTs}
+    except Exception as e:
+        logging.error(f"In analysis_batch(), unknow error: {e}")
 
-            time_dict = time_mask(df[S], dut, bins=100, n_bootstrap=n_bootstrap, show_plot=show_plot, mask=this_mask, CFD_DUT=CFD_DUT,
-                                  title_info=' center cut', savefig=os.path.join(dir_path,f'time_plot_with_center_cuts_{S}_{this_batch}_DUT{dut}.png'))[1]
-            time_resolution, time_res_err = error_propagation(time_dict['parameters'][2], time_dict['parameters_errors'][2], MCP_resolution, MCP_error)
-        except Exception as e:
-            logging.error(f"in analysis_batch(), Time fit error: {e}")
-            results_dictionary[dut]['comments'].add(f"Time fit error ({e})")
-            time_resolution, time_res_err = 0, 0
-        
-        results_dictionary[dut]['time_resolution'], results_dictionary[dut]['time_res_err'] = time_resolution, time_res_err
-        logging.info(f"in analysis_batch(), Time resolution: {time_resolution:.2f}ps +/- {time_res_err:.2f}ps, (MCP: {MCP_resolution}ps)")
-        ### efficiency only calculated with center and time cuts
-        results_dictionary[dut]['efficiency'],_ = efficiency_error(df[S][f"charge_{dut}"].loc[np.logical_and(central_sensor_area_cuts[dut-1],time_cuts[dut-1])], threshold=threshold_charge)
+    if new_results:
+        for dut in DUTs:
+            ch = f'Ch{dut+1}'
+            results_dictionary[dut]['name'] = batch_object.S[S].get_sensor(ch).name
+            results_dictionary[dut]['board'] = batch_object.S[S].get_sensor(ch).board
+            results_dictionary[dut]['voltage'] = batch_object.S[S].get_sensor(ch).voltage
+            results_dictionary[dut]['current'] = batch_object.S[S].get_sensor(ch).current
+            results_dictionary[dut]['fluence'] = batch_object.S[S].get_sensor(ch).fluence
+            results_dictionary[dut]['MCP_voltage'] = batch_object.S[S].get_sensor('Ch1').voltage
+            MCP_voltage = batch_object.S[S].get_sensor('Ch1').voltage
+            results_dictionary[dut]['temp_A'] = batch_object.S[S].tempA
+            results_dictionary[dut]['temp_B'] = batch_object.S[S].tempB
+            results_dictionary[dut]['angle'] = batch_object.angle
+            results_dictionary[dut]['humidity'] = batch_object.humidity
+            results_dictionary[dut]['temperature'] = batch_object.temperature
+            try:
+                charge_fit_file = f"charge_fit_results_{this_batch}_{S}_{dut}.csv"
+                charge_fit_df = pd.read_csv(os.path.join(ROOT_fit_dir,"Charge_fit_results",charge_fit_file), skiprows=1)
+                results_dictionary[dut]['charge'] = charge_fit_df["MPV"].iloc[0]
+                results_dictionary[dut]['charge_error'] = charge_fit_df["MPV_error"].iloc[0]
+                
+            except FileNotFoundError:
+                logging.error("in analysis_batch(), charge file not found")
+                results_dictionary[dut]['charge'], results_dictionary[dut]['charge_error'] = -1, 0
+                results_dictionary[dut]['comments'].add("Charge fit file not found")
+            except Exception as e:
+                logging.errorf(f"in analysis_batch(), raised error {e} when loading charge fit")
+                results_dictionary[dut]['charge'], results_dictionary[dut]['charge_error'] = -1, 0
+                results_dictionary[dut]['comments'].add("Charge fit error")
+                ### read the results from the file
+            match MCP_voltage:  ### matche the MCP voltage to its time resolution
+                case 2500: 
+                    MCP_resolution, MCP_error = 36.52, 0.81  # 36.52 +/- 0.81 ps
+                case 2600: 
+                    MCP_resolution, MCP_error = 16.48, 0.57  # 16.48 +/- 0.57 ps
+                case 2800: 
+                    MCP_resolution, MCP_error = 3.73, 1.33   # 3.73 +/- 1.33 ps
+                case other: logging.error(f"in analysis_batch(), incorrect MCP voltage: {other}")
+            try:
+                ### for all sensors that are irradiated set CFD for the DUT to 70%
+                if results_dictionary[dut]['fluence'] != 0:         CFD_DUT = 70
+                elif results_dictionary[dut]['fluence'] == 0:       CFD_DUT = 20
+                else:        logging.error(f"Value of fluence not recognized:{results_dictionary[dut]['fluence']}, unable to set CFD value")
+                ### option to make the geometrical cut be only the central 0.5xo.5mm^2 OR the full surface of the dut
+                if only_center: 
+                    this_mask = np.logical_and(central_sensor_area_cuts[dut-1], time_fit_cuts[dut-1])
+                else:
+                    this_mask = np.logical_and(geo_cuts[dut-1],time_fit_cuts[dut-1])
 
+                time_dict = time_mask(df[S], dut, bins=100, n_bootstrap=n_bootstrap, show_plot=show_plot, mask=this_mask, CFD_DUT=CFD_DUT,
+                                    title_info=' center cut', savefig=os.path.join(dir_path,f'time_plot_with_center_cuts_{S}_{this_batch}_DUT{dut}.png'))[1]
+                time_resolution, time_res_err = error_propagation(time_dict['parameters'][2], time_dict['parameters_errors'][2], MCP_resolution, MCP_error)
+            except Exception as e:
+                logging.error(f"in analysis_batch(), Time fit error: {e}")
+                results_dictionary[dut]['comments'].add(f"Time fit error ({e})")
+                time_resolution, time_res_err = 0, 0
+            
+            results_dictionary[dut]['time_resolution'], results_dictionary[dut]['time_res_err'] = time_resolution, time_res_err
+            logging.info(f"in analysis_batch(), Time resolution: {time_resolution:.2f}ps +/- {time_res_err:.2f}ps, (MCP: {MCP_resolution}ps)")
+            ### efficiency only calculated with center and time cuts
+            results_dictionary[dut]['efficiency'],_ = efficiency_error(df[S][f"charge_{dut}"].loc[np.logical_and(central_sensor_area_cuts[dut-1],time_cuts[dut-1])], threshold=threshold_charge)
+    else:
+        logging.info("In analysis_batch(), loading existing data and NOT calculating new results")
+
+    
+    with open(os.path.join(results_path, results_name), 'wb') as f:
+        pickle.dump(results_dictionary, f)
+    logging.info(f"in analysis_batch")
     stop = time.time()
 
     print(f"TOTAL TIME: {(stop-start)//60:.0f} min and {(stop-start)%60:.2f} sec")
 
     
     if return_results:
-        ### I need to update all the code in Analysis_and_comparison_UTSC for the fact that I have 3 (or different number) of DUTS
         return results_dictionary
 
 
@@ -259,19 +278,23 @@ def main(argv):
         ### use the argparse package to parse command line arguments
     parser = argparse.ArgumentParser(description='Plot a single batch, given batch number and other arguments')
     parser.add_argument('--batch', type=int, help='Batch number')
-    parser.add_argument('--SAVE', action='store_true', help='SAVE option to save plots (or not)')
-    parser.add_argument('--show_plots', action='store_true', help='option to show plots (or not)')
+    parser.add_argument('--do_plots', action='store_true', help='if False, no plots are produced')
     parser.add_argument('--fit_charge', action='store_true', help='if charge should be fitted (with ROOT)')
     parser.add_argument('--CFD_matrix', action='store_true', help='option for CFD comparison plots')
+    parser.add_argument('--new_results', action='store_true', help='choice to recalculate the data or just read from existing files')
+    parser.add_argument('--SAVE', action='store_true', help='SAVE option to save plots (or not)')
+    parser.add_argument('--show_plots', action='store_true', help='option to show plots (or not)')
     # parser.add_argument('-d', default=False, help='Output directory')
     args = parser.parse_args(argv[1:])
 
     this_batch = args.batch
+    do_plots = args.do_plots
     fit_charge = args.fit_charge
+    CFD_comparison = args.CFD_matrix
+    new_results = args.new_results
     SAVE = args.SAVE
     show_plot = args.show_plots
-    CFD_comparison = args.CFD_matrix
-    logging.info(f"in main() of Single_batch.py, parsed arguments:  batch: {this_batch}, SAVE: {SAVE}, show_plot: {show_plot}, fit_charge: {fit_charge}, CFD_comp: {CFD_comparison}")
+    logging.info(f"in main() of Single_batch.py, parsed arguments:  batch: {this_batch}, SAVE: {SAVE}, do_plots: {do_plots}, show_plot: {show_plot}, fit_charge: {fit_charge}, CFD_comp: {CFD_comparison}, new_results: {new_results}")
 
     if this_batch is None:
         logging.error(f"in main() of Singe_batch, no batch number has been passed as argument, run e.g. 'python3 Single_batch.py --batch 301 --SAVE' ")
@@ -298,7 +321,7 @@ def main(argv):
         DUTs = get_DUTs_from_dictionary(info_df,S)
         if not DUTs:
             continue
-        analysis_batch(this_batch, dict_of_batches[this_batch], S, n_DUT=DUTs, do_plots=True, show_plot=show_plot, SAVE=SAVE, CFD_comparison=CFD_comparison, fit_charge=fit_charge, return_results=False)
+        analysis_batch(this_batch, dict_of_batches[this_batch], S, n_DUT=DUTs, do_plots=do_plots, show_plot=show_plot, SAVE=SAVE, CFD_comparison=CFD_comparison, fit_charge=fit_charge, new_results=new_results, return_results=False)
 
 ### I need a main() function so I can import it as a module and call the analysis_batch()
 if __name__ == "__main__":
