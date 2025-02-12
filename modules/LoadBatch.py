@@ -22,6 +22,7 @@ from .SensorClasses import Batch, Sensor, Oscilloscope
 # print("in loadbatch, __package__==",  __package__)
 
 PIXEL_SIZE = 0.0184 #mm
+NO_BOARD = 'no_board' ### this is repetition from SensorClasses.py
 
 ### binning options
 large_bins = (np.arange(0, 900,1),
@@ -589,7 +590,7 @@ def geometry_mask(df, DUT_number, bins, bins_find_min='rice', only_select="norma
                 min_value = find_min_btw_peaks(df[f"pulseHeight_{dut}"], bins=bins_find_min, show_plot=show_plot)#True
                 my_filter = df[f"pulseHeight_{dut}"]>min_value
             case 'time':
-                my_filter = time_mask(df, dut, bins=time_bins, show_plot=show_plot)[0]
+                my_filter = time_mask(df, dut, bins=time_bins, do_plots=show_plot)[0]
             case other:
                 logging.warning(f"wrong parameter: {other}, options: 'pulseheight' or 'time' ")
         Xtr_cut = df[f"Xtr_{dut-1}"].loc[my_filter]       ### X tracks with applied pulseHeight
@@ -636,7 +637,7 @@ def geometry_mask(df, DUT_number, bins, bins_find_min='rice', only_select="norma
     return bool_geometry, {'left_edge':left_edge, 'right_edge':right_edge, 'bottom_edge':bottom_edge, 'top_edge':top_edge}
 
 
-def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None, sigmas=3, CFD_DUT=20, CFD_MCP=50, show_plot=False, savefig=False, title_info='', fig_ax=None):
+def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None, sigmas=3, CFD_DUT=20, CFD_MCP=50, do_plots=False, savefig=False, title_info='', fig_ax=None):
     """
     Creates a boolean mask using a gaussian+background fit of the time difference between DUT and MCP.
     The fit is done in the time window -20e3 :_: 20e3
@@ -652,7 +653,7 @@ def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None,
     mask:       boolean array (only one array) to filter events where 'mask' is True (i.e. df['Xtr'].loc[mask[DUT]])
     p0:         initial parameters for the gaussian fit (A, mu, sigma, background)
     sigmas:     number of sigmas from the center to include in the time cut window
-    show_plot:       boolean, if False: np.histogram is called instead, so that no plot is shown
+    do_plots:    boolean, if False: np.histogram is called instead, so that no plot is created
     savefig:    boolean, if not False: the fig is saved at the path 'savefig' (include file name please)
     title_info: additional info to put in the title (e.g. batch number)
 
@@ -679,7 +680,7 @@ def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None,
     else:
         boolean_mask = window_fit
     time_data = df[f"timeCFD{CFD_DUT}_{dut}"].loc[boolean_mask]-df[f"timeCFD{CFD_MCP}_0"].loc[boolean_mask]
-    if show_plot:
+    if do_plots:
         if fig_ax:  hist,my_bins,_,fig,ax = plot_histogram((time_data), bins=bins, poisson_err=True, fig_ax=fig_ax)
         else:       hist,my_bins,_,fig,ax = plot_histogram((time_data), bins=bins, poisson_err=True)
     else:       hist,my_bins = np.histogram((time_data), bins=bins, density=False)
@@ -712,18 +713,18 @@ def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None,
                                      bounds=((0,-np.inf,0,0),(np.inf,np.inf,np.inf,np.inf)), nan_policy='omit')
             param_error, covar_error = np.diagonal(covar)**.5, np.zeros_like(covar)
         logging.info(f"in 'time_mask()': Fit parameters {param}")
-    except:
-        logging.error("in 'time_mask(): some error occurred while fitting, no time mask")
-        return pd.Series(True, index=df.index), None
+    except Exception as e:
+        logging.error("in 'time_mask(): {e} occurred while fitting, no time mask")
+        return pd.Series(True, index=df.index), dict()
                 ###      (  Y_n - f(X_n)  )**2          /    sigma_n=(f_k**.5 / (N*bin_size)**.5 )     /  (d.o.f)                       
     chi2_reduced = sum(((hist - density_factor*my_gauss(bins_centers,*param)) / hist_error)**2) / (len(hist)-len(param))
     ### coefficient of determination R^2 = 1 - (sum of residuals / variance) * (n-1 / n-p-1)
-    R2_adjusted = 1 - (sum((hist - density_factor*my_gauss(bins_centers,*param))**2)/(len(hist)-len(param)-1) / (np.std(hist)**2/(len(hist)-1)) )
+    # R2_adjusted = 1 - (sum((hist - density_factor*my_gauss(bins_centers,*param))**2)/(len(hist)-len(param)-1) / (np.std(hist)**2/(len(hist)-1)) )
     left_base, right_base = param[1]-sigmas*np.abs(param[2]), param[1]+sigmas*np.abs(param[2])
     left_cut =  (df[f"timeCFD{CFD_DUT}_{dut}"]-df[f"timeCFD{CFD_MCP}_0"])>left_base
     right_cut = (df[f"timeCFD{CFD_DUT}_{dut}"]-df[f"timeCFD{CFD_MCP}_0"])<right_base
     time_cut = np.logical_and(left_cut, right_cut)
-    if show_plot:
+    if do_plots:
         ax.set_xlim(param[1]-20*np.abs(param[2]), param[1]+30*np.abs(param[2])) ### sligthly asymmetric to fit the legend better
         ax.set_xlabel(f"$\Delta t$ [ps] (DUT - MCP)", fontsize=14)
         ax.set_ylabel("Events", fontsize=14)
@@ -735,7 +736,7 @@ def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None,
         if savefig:
             fig.savefig(savefig)
     return time_cut, {'parameters':param, 'parameters_errors':param_error, 'covariance':covar, 'covariance_errors':covar_error,
-                      'chi2_reduced':chi2_reduced, 'R2_adjusted':R2_adjusted, 'left_base':left_base, 'right_base':right_base} # info 
+                      'chi2_reduced':chi2_reduced, 'left_base':left_base, 'right_base':right_base} # info 
     
 
 def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice', time_bins=5000, n_DUT=None, CFD_values=None, efficiency_lim=None, extra_info=True, info=True, 
@@ -916,7 +917,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                         pulse_cut = 0
                     else:
                         axes[i].axhline(pulse_cut, color='r', label="PulseHeight cut value: %.1f mV"%pulse_cut)
-                    time_info = time_mask(df, dut, bins=bins, show_plot=False)[1]
+                    time_info = time_mask(df, dut, bins=bins, do_plots=False)[1]
                     if time_info is not None:
                         left_base, right_base = time_info['left_base'], time_info['right_base']
                         axes[i].axvline(left_base, color='g', alpha=.9, label="Time cut: %.0fps$<\Delta t<$ %.0fps"%(left_base, right_base))
@@ -1057,6 +1058,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                     MCP_resolution, MCP_error = 3.73, 1.33   # 3.73 +/- 1.33 ps
                 case other: logging.error("Incorrect MCP voltage")
 
+            ### CFD_comparison only works for ONE dut at a time
             dut = n_DUT
             fig, axes = plt.subplots(figsize=(6*axes_size,4*axes_size), nrows=axes_size, ncols=axes_size, dpi=300)
             
@@ -1075,7 +1077,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                                         (df[f"timeCFD{CFD_DUT}_{dut}"]-df[f"timeCFD{CFD_MCP}_0"])< +window_limit)
                 dut_cut = np.logical_and(window_fit, dut_cut)
 
-                time_dict = time_mask(df, dut, bins=time_bins, n_bootstrap=False, show_plot=True, mask=dut_cut, CFD_DUT=CFD_DUT, CFD_MCP=CFD_MCP, 
+                time_dict = time_mask(df, dut, bins=time_bins, n_bootstrap=False, do_plots=True, mask=dut_cut, CFD_DUT=CFD_DUT, CFD_MCP=CFD_MCP, 
                                       title_info=f'\n CFD DUT:{CFD_DUT}% CFD MCP:{CFD_MCP}%', fig_ax=(fig,ax))[1]
 
                 param, param_err = time_dict['parameters'], time_dict['parameters_errors']
@@ -1085,7 +1087,11 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 chi2_table.append(time_dict['chi2_reduced'])
 
                 ax.set_xlim(xlim)
-
+                if not show_plot:
+                    plt.close(fig)
+                else:
+                    plt.show()
+                    
             fig.tight_layout(w_pad=4, h_pad=4)
             savefig_details += f' {this_scope} dut: {dut}'
             if title_position is None: title_position = 1.1
@@ -1103,9 +1109,10 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
     
     if title is None:
         fig.suptitle(f"{plot_type}, batch: {batch_object.batch_number} {savefig_details}", fontsize=24, y=title_position)
+    elif title is False:
+        fig.suptitle("")
     elif title:
         fig.suptitle(title, fontsize=24, y=title_position)
-    ### if title is False: make no title
 
 
     if savefig: 
@@ -1113,5 +1120,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
         fig.savefig(os.path.join(savefig_path, file_name), bbox_inches="tight")
     if not show_plot:
         plt.close(fig)
+    else:
+        plt.show()
     return fig, axes
 
