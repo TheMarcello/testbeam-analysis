@@ -104,7 +104,7 @@ def analysis_batch(this_batch, batch_object, S, n_DUT=None, CFD_comparison=False
     ### [ ... if dut in DUTs else None for dut in [1,2,3]]  avoids calculating the cuts for the channels with no dut
     geo_cuts = [geometry_mask(df[S], DUT_number=dut, bins=these_bins, bins_find_min=binning_method, use=use_for_geometry_cut)[0] if dut in DUTs else None for dut in [1,2,3]]
     central_sensor_area_cuts = [geometry_mask(df[S], DUT_number=dut, bins=these_bins, bins_find_min=binning_method, only_select='center', use=use_for_geometry_cut)[0] if dut in DUTs else None for dut in [1,2,3]]
-    time_cuts = [time_mask(df[S], dut, bins=time_bins, mask=geo_cuts[dut-1], n_bootstrap=False, show_plot=False, savefig=os.path.join(dir_path,f'time_plot_with_geo_cuts_{S}_{this_batch}_DUT{dut}.png'))[0] if dut in DUTs else None for dut in [1,2,3]]
+    time_cuts = [time_mask(df[S], dut, bins=time_bins, mask=geo_cuts[dut-1], n_bootstrap=False, do_plots=False, savefig=os.path.join(dir_path,f'time_plot_with_geo_cuts_{S}_{this_batch}_DUT{dut}.png'))[0] if dut in DUTs else None for dut in [1,2,3]]
     charge_cuts = [df[S][f'charge_{dut}']/my_transimpedance>threshold_charge if dut in DUTs else None for dut in [1,2,3]]
 
     ### I still need pulseHeight cut for the charge fit
@@ -175,13 +175,13 @@ def analysis_batch(this_batch, batch_object, S, n_DUT=None, CFD_comparison=False
     ### CFD values comparison with normal geo cuts
         CFD_mask = [np.logical_and(time_fit_cuts[dut-1], geo_cuts[dut-1]) if dut in DUTs else None for dut in [1,2,3]]
         for dut in DUTs:
-            fig, _ = plot(df[S], 'CFD_comparison', batch_object, S, n_DUT=dut, CFD_values=CFD_values, mask=CFD_mask, time_bins=time_bins_fine,
+            fig, _ = plot(df[S], 'CFD_comparison', batch_object, S, n_DUT=dut, CFD_values=CFD_values, mask=CFD_mask, time_bins=time_bins_fine, show_plot=show_plot, title='',
                     savefig=SAVE, savefig_path=dir_path, savefig_details=f" geo cuts",fmt='png')
             plt.close(fig)
     ### CFD values comparison with central area cuts (less statistics)
         CFD_mask = [np.logical_and(time_fit_cuts[dut-1], central_sensor_area_cuts[dut-1]) if dut in DUTs else None for dut in [1,2,3]]
         for dut in DUTs:
-            fig, _ = plot(df[S], 'CFD_comparison', batch_object, S, n_DUT=dut, CFD_values=CFD_values, mask=CFD_mask, time_bins=time_bins_fine,
+            fig, _ = plot(df[S], 'CFD_comparison', batch_object, S, n_DUT=dut, CFD_values=CFD_values, mask=CFD_mask, time_bins=time_bins_fine, show_plot=show_plot,
                     savefig=SAVE, savefig_path=dir_path, savefig_details=f" central area cuts",fmt='png')
             plt.close(fig)
 
@@ -243,7 +243,7 @@ def analysis_batch(this_batch, batch_object, S, n_DUT=None, CFD_comparison=False
                 else:
                     this_mask = np.logical_and(geo_cuts[dut-1],time_fit_cuts[dut-1])
 
-                time_dict = time_mask(df[S], dut, bins=100, n_bootstrap=n_bootstrap, show_plot=show_plot, mask=this_mask, CFD_DUT=CFD_DUT,
+                time_dict = time_mask(df[S], dut, bins=100, n_bootstrap=n_bootstrap, do_plots=show_plot, mask=this_mask, CFD_DUT=CFD_DUT,
                                     title_info=' center cut', savefig=os.path.join(dir_path,f'time_plot_with_center_cuts_{S}_{this_batch}_DUT{dut}.png'))[1]
                 time_resolution, time_res_err = error_propagation(time_dict['parameters'][2], time_dict['parameters_errors'][2], MCP_resolution, MCP_error)
             except Exception as e:
