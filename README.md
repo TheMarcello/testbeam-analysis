@@ -2,9 +2,63 @@
 
 Work in progress
 
+
+## Usage
+
+
 ## LoadBatch
 
 Contains a lot of useful functions that I use to load a `.root` file into Python and to analyze its content
+
+## SensorClasses.py
+
+Basic data structures employed (contained in 'SensorClasses.py'):
+### `Batch`
+- **Attributes**:
+    - `batch_number (int)`: Batch number (example: 403).
+    - `angle (float)`: Angle of the DUTs do the beam.
+    - `humidity (float)`: Average humidity [%].
+    - `temperature (float)`: Average temperature [°C].
+    - `S (dict)`: Dictionary containing the two `Oscilloscope`: 
+
+        `{'S1':Oscilloscope1, 'S2':Oscilloscope2}`.
+
+- **Methods**: (for initialization only)
+    - `set_fluence_boards()`: manually inserts the fluence values.
+    - `set_transimpedance()`: manually sets the transimpedance values [OBSOLETE].
+
+### `Oscilloscope`
+- **Attribuses**:
+    - `name (str)`: Name of the oscilloscope 'S1' or 'S2'.
+    - `channels (dict)`: Dictionary containing the four channels of the `Oscilloscope`:
+
+        `{'Ch1': Sensor1, 'Ch2': Sensor2, 'Ch3': Sensor3, 'Ch4': Sensor4}`.
+    - `runs (list)`: List of the runs included in this batch 
+    - `tempA (list)`: List of temperatures, from thermometer A
+    - `tempB (list)`: List of temperatures, from thermometer B
+
+- **Methods**:
+    - `add_sensor(channel, Sensor)`: Sets one of the channels with a `Sensor`.
+    - `get_sensor(channel)`: Returns `Sensors` at the called channel.
+
+### `Sensor`
+- **Attributes**:
+    - `name (str)`: Name assigned to the DUT.
+    - `dut_position (int):` Position (order) of the DUT (1-5).
+    - `voltage (float)`: Voltage of the DUT [V].
+    - `current (float)`: Measured current [A].
+    - `board (str)`: Name assigned to the board which the DUT is mounted on.
+    - `fluence (str)`: Irradiation of the sensor [#neutron_eq / cm^2].
+    - `transimpedance (float)`: Transipedance, depends on the board, it is needed to calculate the charge [mV*ps/fC].
+
+
+## Single_batch
+
+
+## Functions description:
+Description of the most important functions implemented
+- plot()
+
 
 ## ToDo
 
