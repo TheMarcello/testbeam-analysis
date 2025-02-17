@@ -72,10 +72,10 @@ class Batch:
     ------------- 
     batch_number:   batch number
     angle:          angle to the beam   [°degrees] ### I should put it into the sensor
-    runs:           list of run numbers belonging to the same batch
-    humidity:       humidity (%) inside the cooling box
+    humidity:       average humidity [%] inside the cooling box
     temperature:    average temperature [°C]
-    S1, S2:         Oscilloscope objects 1 and 2
+    S:              dictionary of the two oscilloscopes
+        {'S1': Oscilloscope1, 'S2': Oscilloscope2}
 
     set_fluence_boards():   sets board names and fluences (only for __init__)
     """
