@@ -389,7 +389,7 @@ def error_propagation(time_difference, time_difference_error, MCP_resolution, MC
     """
     if time_difference**2 < MCP_resolution**2:
         logging.error(f"Invalid values of either Delta_t or MCP resolution: {time_difference} and {MCP_resolution}")
-        return
+        return -1, -1
     z = np.sqrt(time_difference**2 - MCP_resolution**2)
     z_err = np.sqrt((time_difference**2 * time_difference_error**2 + MCP_resolution**2 * MCP_resolution_error**2)) / z
     return z, z_err
@@ -550,7 +550,7 @@ def rectangle_from_geometry_cut(left_edge, right_edge, bottom_edge, top_edge, **
                      **default_arguments)
 
 
-def geometry_mask(df, DUT_number, bins, bins_find_min='rice', only_select="normal", show_plot=False, use='pulseheight', time_bins=5000, fraction=0.2):
+def geometry_mask(df, DUT_number, bins, bins_find_min='rice', mask=None, only_select="normal", show_plot=False, use='pulseheight', time_bins=5000, fraction=0.2):
     """
     Creates a boolean mask for selecting the 2D shape of the dut (sensor) by applying a pulseHeight cut.
     If the minimum of the pulseHeight could not be found it returns all True
@@ -561,6 +561,7 @@ def geometry_mask(df, DUT_number, bins, bins_find_min='rice', only_select="norma
     bins:           bins options for  "Xtr" and "Ytr"
     DUT_number:     number of the DUT (1,2,3), corresponding to Channels 2,3,4
     bins_find_min:  bins options for 'find_min_btw_peaks()'
+    mask:           specify a mask, on which to base the geometry cut (typically pulse_cut or time_cut)
     only_select:    option to select specific subselections of the 'geometry cut'
                         'center':   central area of 0.5x0.5 mm^2
                         'extended': 20% extended area (to study interpad area)
@@ -585,14 +586,19 @@ def geometry_mask(df, DUT_number, bins, bins_find_min='rice', only_select="norma
     """
     dut = DUT_number ### index of the DUT
     try:
-        match use:
-            case 'pulseheight':
-                min_value = find_min_btw_peaks(df[f"pulseHeight_{dut}"], bins=bins_find_min, show_plot=show_plot)#True
-                my_filter = df[f"pulseHeight_{dut}"]>min_value
-            case 'time':
-                my_filter = time_mask(df, dut, bins=time_bins, do_plots=show_plot)[0]
-            case other:
-                logging.warning(f"wrong parameter: {other}, options: 'pulseheight' or 'time' ")
+        ### I can add a if mask is None, so that it doesn't change the behaviour when I don't specify the mask
+        if mask is None:
+            logging.info(f"In geometry_mask(), calculating pulse or time mask because none was provided")
+            match use:
+                case 'pulseheight':
+                    min_value = find_min_btw_peaks(df[f"pulseHeight_{dut}"], bins=bins_find_min, show_plot=show_plot)#True
+                    my_filter = df[f"pulseHeight_{dut}"]>min_value
+                case 'time':
+                    my_filter = time_mask(df, dut, bins=time_bins, do_plots=show_plot)[0]
+                case other:
+                    logging.warning(f"wrong parameter: {other}, options: 'pulseheight' or 'time' ")
+        else:
+            my_filter = mask
         Xtr_cut = df[f"Xtr_{dut-1}"].loc[my_filter]       ### X tracks with applied pulseHeight
         Ytr_cut = df[f"Ytr_{dut-1}"].loc[my_filter]
         left_edge, right_edge = find_edges(Xtr_cut, bins=bins[0], use_kde=True)
@@ -661,12 +667,11 @@ def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None,
     -------
     time_cut:   boolean mask of the events within the calculated time frame
     info:       dictionary containing other useful information about the time cut:
-                    'parameters':       parameters of the gaussian fit 
+                    'parameters':       parameters of the gaussian fit, my_gauss()
                     'parameters_errors':  and their uncertainty from the fit (or bootstrap method if used) 
                     'covariance':       covariance   "   "   "   "
                     'covariance_errors':   and their uncertainty from the fit (or bootstrap method if used) 
                     'chi2_reduced':     reduced chi squared: chi^2/d.o.f.
-                    'R2_adjusted':      coefficient of determination (alternative to chi^2)
                     'left_base':        value of the left edge of the cut
                     'right_base':       value of the right edge of the cut
     """
@@ -712,9 +717,9 @@ def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None,
             param, covar = curve_fit(my_gauss, bins_centers, hist, p0=p0, sigma=hist_error/density_factor, absolute_sigma=True, 
                                      bounds=((0,-np.inf,0,0),(np.inf,np.inf,np.inf,np.inf)), nan_policy='omit')
             param_error, covar_error = np.diagonal(covar)**.5, np.zeros_like(covar)
-        logging.info(f"in 'time_mask()': Fit parameters {param}")
+        logging.info(f"in 'time_mask()': bins:{len(my_bins)-1},  fit parameters {param}")
     except Exception as e:
-        logging.error("in 'time_mask(): {e} occurred while fitting, no time mask")
+        logging.error(f"in 'time_mask(): {e} occurred while fitting, no time mask, returning empty dict")
         return pd.Series(True, index=df.index), dict()
                 ###      (  Y_n - f(X_n)  )**2          /    sigma_n=(f_k**.5 / (N*bin_size)**.5 )     /  (d.o.f)                       
     chi2_reduced = sum(((hist - density_factor*my_gauss(bins_centers,*param)) / hist_error)**2) / (len(hist)-len(param))
@@ -739,7 +744,7 @@ def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None,
                       'chi2_reduced':chi2_reduced, 'left_base':left_base, 'right_base':right_base} # info 
     
 
-def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice', time_bins=5000, n_DUT=None, CFD_values=None, efficiency_lim=None, extra_info=True, info=True, 
+def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice', time_bins=10000, n_DUT=None, CFD_values=None, efficiency_lim=None, extra_info=True, info=True, 
         geometry_cut="normal", mask=None, threshold_charge=4, transimpedance=None, use='pulseheight', zoom_to_sensor=False, 
         fig_ax=None, savefig=False, savefig_path='../various plots', savefig_details='', show_plot=True, fmt='svg', title = None, title_position=None,
         **kwrd_arg):
@@ -761,6 +766,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
     this_scope:     oscilloscope name (either 'S1' or 'S2')
     bins:           binning options, (int,int) or (bin_edges_list, bin_edges_list), different default for each plot_type
     bins_find_min:  binning options for the find_min_btw_peaks function (in '2D_Sensors')  
+    time_bins:      binning for the time information
     n_DUT:          number of devices under test (3 for each oscilloscope for May 2023)
     efficiency_lim: limit of the y axis for 1D efficiency plot
     extra_info:     boolean option to have extra information on the plot        ### now only for 'Time_pulseHeight' but could be more generally useful 
@@ -770,7 +776,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                         'center':   central area of 0.5x0.5 mm^2
                         'extended': 20% extended area (to study interpad area)
                         'normal':   full dut area 
-                        'XY':        only filters on one axis (X/Y)
+                        'XY':       only filters on one axis (X/Y)
                         False:      no geometry cut applied
     threshold_charge: threshold charge for efficiency calculations (default 4fC)
     transimpedance: manually change the transimpedance values
@@ -950,11 +956,11 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             if efficiency_lim is None: ylim = (0.4, 1)
             else: ylim = efficiency_lim
             for i,dut in enumerate(n_DUT):
-                if geometry_cut in ('center', 'normal', 'extended'):
-                    geo_mask, edges = geometry_mask(df, DUT_number=dut, bins=bins, bins_find_min=bins_find_min, only_select=geometry_cut, use=use)
+                if geometry_cut in ('center', 'normal', 'extended'): ### I kinda want to change it so that I don't need "use=" and I just apply "mask"
+                    geo_mask, edges = geometry_mask(df, DUT_number=dut, bins=bins, bins_find_min=bins_find_min, mask=mask[dut-1], only_select=geometry_cut, use=use)
                 for coord_idx, XY in enumerate(('X','Y')):  # coord = ['X','Y']
                     if geometry_cut=='XY':
-                        geo_mask, edges = geometry_mask(df, DUT_number=dut, bins=bins, bins_find_min=bins_find_min, only_select=XY, use=use)
+                        geo_mask, edges = geometry_mask(df, DUT_number=dut, bins=bins, bins_find_min=bins_find_min, mask=mask[dut-1], only_select=XY, use=use)
                     if geometry_cut and mask: bool_mask = np.logical_and(mask[dut-1],geo_mask)
                     elif geometry_cut:  bool_mask = geo_mask  ### this is a boolean mask of the selected positions                
                     elif mask:          bool_mask = mask[dut-1]
@@ -1003,9 +1009,9 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             axes = np.atleast_1d(axes)      ### for simplicity, so I can use axes[i] for a single DUT 
             for i,dut in enumerate(n_DUT):
                 if geometry_cut and mask: 
-                    geo_mask, edges = geometry_mask(df, DUT_number=dut, bins=bins, bins_find_min=bins_find_min, only_select=geometry_cut, use=use)    ### this is a boolean mask of the selected positions
+                    geo_mask, edges = geometry_mask(df, DUT_number=dut, bins=bins, bins_find_min=bins_find_min, mask=mask[dut-1], only_select=geometry_cut, use=use)    ### this is a boolean mask of the selected positions
                     bool_mask = np.logical_and(mask[dut-1],geo_mask)
-                elif geometry_cut: bool_mask, edges = geometry_mask(df, DUT_number=dut, bins=bins, bins_find_min=bins_find_min, only_select=geometry_cut, use=use)
+                elif geometry_cut: bool_mask, edges = geometry_mask(df, DUT_number=dut, bins=bins, bins_find_min=bins_find_min, mask=mask[dut-1], only_select=geometry_cut, use=use)
                 elif mask:    bool_mask = mask[dut-1]
                 else:       bool_mask = pd.Series(True,index=df.index) 
                 if transimpedance is None:
@@ -1042,11 +1048,12 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             # savefig_details += f'(geometry cut using {use})' 
 
         case "CFD_comparison":
-            if bins is None: bins = (200,200)       ### default binning
+            ### now this automatically adds a preliminary time_cut (to a 3 sigmas cut around the gaussian fit)
+            if bins is None: bins = 100     ### default binning, not used here
             if CFD_values is None: CFD_values = (20,50,70)
             axes_size = len(CFD_values)
 
-            window_limit = 20e3
+            # window_limit = 20e3 ### already done in time_mask()
             xlim = (-7e3,-4.5e3)
             MCP_voltage = batch_object.S[this_scope].get_sensor('Ch1').voltage
             match MCP_voltage:  ### matche the MCP voltage to its time resolution
@@ -1065,28 +1072,31 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
             ### I NEED TO RETURN THIS VALUES (I am currently not returning this values, so boh?)
             time_resolution_table = []
             chi2_table = []
-
             for i, ax in enumerate(axes.flatten()):
                 CFD_MCP = CFD_values[i//axes_size]
                 CFD_DUT = CFD_values[i%axes_size]
 
                 if mask is not None:    dut_cut = mask[dut-1]
                 else:                   dut_cut = pd.Series(True, index=df.index)
+                try:
+                    ### the only way to get the same result as the final time resolution is to repeat the same cuts here, I can only pass charge_cuts and pulse_noise_cuts from 'mask'.
+                    # time_cuts_prelim = time_mask(df, dut, bins=time_bins, n_bootstrap=False, do_plots=False, mask=None, CFD_DUT=CFD_DUT, CFD_MCP=CFD_MCP, sigmas=3)[0] ### I could increase this potentially
+                    time_cuts = time_mask(df, dut, bins=10000, n_bootstrap=False, do_plots=False, mask=dut_cut, CFD_DUT=CFD_DUT, CFD_MCP=CFD_MCP, sigmas=3)[0] ### I could increase this potentially
 
-                window_fit = np.logical_and((df[f"timeCFD{CFD_DUT}_{dut}"]-df[f"timeCFD{CFD_MCP}_0"])> -window_limit,
-                                        (df[f"timeCFD{CFD_DUT}_{dut}"]-df[f"timeCFD{CFD_MCP}_0"])< +window_limit)
-                dut_cut = np.logical_and(window_fit, dut_cut)
+                    dut_cut = np.logical_and(time_cuts, dut_cut)
 
-                time_dict = time_mask(df, dut, bins=time_bins, n_bootstrap=False, do_plots=True, mask=dut_cut, CFD_DUT=CFD_DUT, CFD_MCP=CFD_MCP, 
-                                      title_info=f'\n CFD DUT:{CFD_DUT}% CFD MCP:{CFD_MCP}%', fig_ax=(fig,ax))[1]
+                    time_dict = time_mask(df, dut, bins=time_bins, n_bootstrap=False, do_plots=True, mask=dut_cut, CFD_DUT=CFD_DUT, CFD_MCP=CFD_MCP, 
+                                        title_info=f'\n CFD DUT:{CFD_DUT}% CFD MCP:{CFD_MCP}%', fig_ax=(fig,ax))[1]
 
-                param, param_err = time_dict['parameters'], time_dict['parameters_errors']
+                    param, param_err = time_dict['parameters'], time_dict['parameters_errors']
 
-                time_resolution_table.append(error_propagation(param[2], param_err[2], MCP_resolution, MCP_error))
-                # time_resolution_table.append(np.sqrt(param[2]**2-MCP_resolution**2))
-                chi2_table.append(time_dict['chi2_reduced'])
+                    time_resolution_table.append(error_propagation(param[2], param_err[2], MCP_resolution, MCP_error))
+                    chi2_table.append(time_dict['chi2_reduced'])
+                    ax.set_xlim(xlim)
 
-                ax.set_xlim(xlim)
+                except Exception as e:
+                    logging.error(f"In CFD comparison, something wrong with dut:{dut}, CFD_DUT:{CFD_DUT}, CFD_MCP:{CFD_MCP}, raised exception {e}")      
+
                 if not show_plot:
                     plt.close(fig)
                 else:
@@ -1120,7 +1130,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
         fig.savefig(os.path.join(savefig_path, file_name), bbox_inches="tight")
     if not show_plot:
         plt.close(fig)
-    else:
-        plt.show()
+    # else:
+    #     plt.show()
     return fig, axes
 

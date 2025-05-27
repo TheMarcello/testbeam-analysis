@@ -24,7 +24,7 @@ from .LoadBatch import *
 from .SensorClasses import Batch, Sensor, Oscilloscope
 
 
-def analysis_batch(this_batch, batch_object, S, n_DUT=None, CFD_comparison=False, do_plots=True, fit_charge=False, new_results=False, only_center=True, SAVE=True, show_plot=False, time_bins=5000, time_bins_fine=100, results_name="Results_dictionary.pickle", results_path=None, return_results=True, dir_path=None, ROOT_fit_dir=None):
+def analysis_batch(this_batch, batch_object, S, n_DUT=None, CFD_comparison=False, do_plots=True, fit_charge=False, new_results=False, only_center=True, SAVE=True, show_plot=False, time_bins=10000, time_bins_fine=100, results_name="Results_dictionary.pickle", results_path=None, return_results=True, dir_path=None, ROOT_fit_dir=None):
     """
     Performs analysis of one batch: one (or more) duts in a single oscilloscope. Plots a lot of different quantities and performs some fits.
     Also returns a dictionary with all the calculations performed. \n
@@ -73,17 +73,9 @@ def analysis_batch(this_batch, batch_object, S, n_DUT=None, CFD_comparison=False
     binning_method = 'rice'
     threshold_charge = 4 #fC
     eff_lim = (0.4,1)
-    # time_bins = 5000 ### maybe 5000 instead of 4000?
     n_bootstrap = False
     my_transimpedance = 4700 #4700 or 10700   ### I PUT THE TRANSIMPEDANCE TO 4700 MANUALLY
     these_bins = bins_dict[this_batch] #bins1    ### custom bins around the sensors
-    ### the pulseHeight cut of these batches failed too often
-    if this_batch in [502, 505, 601, 602, 603, 604, 605, 901, 902, 1001, 1002]:
-        use_for_geometry_cut = 'time'
-    else:
-        use_for_geometry_cut = 'pulseheight' 
-    logging.info(f"in analysis_batch(), analysing Batch: {this_batch}, {S}\n bins for pulseHeight minimum: {binning_method}, bins for time plots: {time_bins}, bins for time resolution: {time_bins_fine} threshold charge: {threshold_charge}fC, bootstrap: {n_bootstrap}")
-
 
     ### the table has to be generated (in main()), if they don't exist already
     info_df = pd.read_pickle(os.path.join(dir_path,f'table_data_{this_batch}.pickle'))
@@ -102,29 +94,69 @@ def analysis_batch(this_batch, batch_object, S, n_DUT=None, CFD_comparison=False
     
 ### ALL OF THE CUTS
     ### [ ... if dut in DUTs else None for dut in [1,2,3]]  avoids calculating the cuts for the channels with no dut
-    geo_cuts = [geometry_mask(df[S], DUT_number=dut, bins=these_bins, bins_find_min=binning_method, use=use_for_geometry_cut)[0] if dut in DUTs else None for dut in [1,2,3]]
-    central_sensor_area_cuts = [geometry_mask(df[S], DUT_number=dut, bins=these_bins, bins_find_min=binning_method, only_select='center', use=use_for_geometry_cut)[0] if dut in DUTs else None for dut in [1,2,3]]
-    time_cuts = [time_mask(df[S], dut, bins=time_bins, mask=geo_cuts[dut-1], n_bootstrap=False, do_plots=False, savefig=os.path.join(dir_path,f'time_plot_with_geo_cuts_{S}_{this_batch}_DUT{dut}.png'))[0] if dut in DUTs else None for dut in [1,2,3]]
-    charge_cuts = [df[S][f'charge_{dut}']/my_transimpedance>threshold_charge if dut in DUTs else None for dut in [1,2,3]]
-
-    ### I still need pulseHeight cut for the charge fit
+    ### I still need pulseHeight cut for the charge fit (and geo_cuts)
     mins = [find_min_btw_peaks(df[S][f"pulseHeight_{dut}"], bins=binning_method, show_plot=False) if dut in DUTs else None for dut in [1,2,3]]
     ### also check that the pulseHeight is > pedestal + 3*noise
     pulse_noise_cuts = [df[S][f'pulseHeight_{dut}']>(df[S][f"pedestal_{dut}"]+3*df[S][f"noise_{dut}"]) if dut in DUTs else None for dut in [1,2,3]]
     pulse_cuts = [np.logical_and(pulse_noise_cuts[dut-1], df[S][f'pulseHeight_{dut}']>mins[dut-1]) if dut in DUTs else None for dut in [1,2,3]]
+
+    ### replace pulse_cuts with all True if it failed
     for dut in (1,2,3):
         if (pulse_cuts[dut-1] is not None) and (np.all(pulse_cuts[dut-1]==False)):
             pulse_cuts[dut-1] = pd.Series(True, index=df[S].index)
-        if use_for_geometry_cut == "time":   ### also NOT APPLY a pulseHeight cut if I choose time for geometry cut
-            pulse_cuts[dut-1] = pd.Series(True, index=df[S].index)
+
+    logging.info(f"in analysis_batch(), analysing Batch: {this_batch}, {S}\n bins for pulseHeight minimum: {binning_method}, bins for time plots: {time_bins}, bins for time resolution: {time_bins_fine} threshold charge: {threshold_charge}fC, bootstrap: {n_bootstrap}")
+
+ ### TIME CUTS SHOULD ALREADY USE THE CORRECT CFD VALUE 
+    time_cuts_prelim = []
+    for dut in [1,2,3]:
+        if dut in DUTs:
+            fluence = batch_object.S[S].get_sensor(f'Ch{dut+1}').fluence
+            if fluence == 0:     CFD_DUT = 20
+            elif fluence != 0:   CFD_DUT = 70
+            else:           logging.error(f"In preliminary time cuts: value of fluence not recognized: {fluence}, unable to set CFD value") ### still not handling what happens
+            time_cuts_prelim.append(time_mask(df[S], dut, bins=time_bins, CFD_DUT=CFD_DUT, n_bootstrap=False, do_plots=False, sigmas=3)[0])
+        else:    time_cuts_prelim.append(None)
+
+    ### the pulseHeight cut of these batches failed too often
+    ### maybe I should define a "my_mask" so I can use the same for the plots, and then I could also make it earlier (when I specify use_for_geometry_cut)
+    if this_batch in [502, 505, 601, 602, 603, 604, 605, 901, 902, 1001, 1002]:
+        use_for_geometry_cut = 'time'
+        pulse_or_time_mask = time_cuts_prelim
+        ### also NOT APPLY a pulseHeight cut if I choose time for geometry cut
+        pulse_cuts = [pd.Series(True, index=df[S].index) if dut in DUTs else None for dut in [1,2,3]]
+    else:
+        use_for_geometry_cut = 'pulseheight'
+        pulse_or_time_mask = pulse_cuts
+
+    geo_cuts = [geometry_mask(df[S], DUT_number=dut, bins=these_bins, bins_find_min=binning_method, mask=pulse_or_time_mask[dut-1])[0] if dut in DUTs else None for dut in [1,2,3]] ### use='pulseheight'/'time' gets overrided by mask
+    central_sensor_area_cuts = [geometry_mask(df[S], DUT_number=dut, bins=these_bins, bins_find_min=binning_method, mask=pulse_or_time_mask[dut-1], only_select='center')[0] if dut in DUTs else None for dut in [1,2,3]]
+    charge_cuts = [df[S][f'charge_{dut}']/my_transimpedance>threshold_charge if dut in DUTs else None for dut in [1,2,3]]
+    ### I use these for a more refined time cut
+    combined_cuts = [np.logical_and(np.logical_and(np.logical_and(geo_cuts[dut-1], charge_cuts[dut-1]), pulse_cuts[dut-1]), pulse_noise_cuts[dut-1])
+                if dut in DUTs else None for dut in [1,2,3]]
+
+    ### TIME CUTS SHOULD ALREADY USE THE CORRECT CFD VALUE 
+    ### maybe I expand the list comprehension
+    time_cuts = []
+    for dut in [1,2,3]:
+        if dut in DUTs:
+            fluence = batch_object.S[S].get_sensor(f'Ch{dut+1}').fluence
+            if fluence == 0:     CFD_DUT = 20
+            elif fluence != 0:   CFD_DUT = 70
+            else:           logging.error(f"In time cuts: value of fluence not recognized: {fluence}, unable to set CFD value")
+            time_cuts.append(time_mask(df[S], dut, bins=time_bins, mask=combined_cuts[dut-1], CFD_DUT=CFD_DUT, n_bootstrap=False, do_plots=False)[0])
+        else:
+            time_cuts.append(None)
+
 
     ### charge distribution with cuts saved into a file and the fitted with ROOT Landau*Gauss convolution
     all_cuts = [np.logical_and(np.logical_and(np.logical_and(geo_cuts[dut-1], time_cuts[dut-1]), pulse_cuts[dut-1]), pulse_noise_cuts[dut-1])
                 if dut in DUTs else None for dut in [1,2,3]]
     
     ### I also do the fit between 3 sigmas because the tails make it worse (aka also time_cut)
-    time_fit_cuts = [np.logical_and(np.logical_and(pulse_noise_cuts[dut-1], charge_cuts[dut-1]), time_cuts[dut-1])
-                        if dut in DUTs else None for dut in [1,2,3]]
+    # time_fit_cuts = [np.logical_and(np.logical_and(pulse_noise_cuts[dut-1], charge_cuts[dut-1]), time_cuts[dut-1])
+    #                     if dut in DUTs else None for dut in [1,2,3]]
 
 ### FIT OF THE CHARGE 
     if fit_charge:
@@ -137,6 +169,7 @@ def analysis_batch(this_batch, batch_object, S, n_DUT=None, CFD_comparison=False
             
 ### ALL OF THE PLOTS
     if do_plots:
+        logging.info
         ## show full area
         plot(df[S], "2D_Tracks", batch_object, S, bins=large_bins,
                 n_DUT=DUTs, show_plot=show_plot, savefig=SAVE, savefig_details=f' {S} all tracks (no cut)', savefig_path=dir_path, fmt='png')  
@@ -155,17 +188,17 @@ def analysis_batch(this_batch, batch_object, S, n_DUT=None, CFD_comparison=False
         ### delta time vs pulseHeight central area no info
         plot(df[S], "Time_pulseHeight", batch_object, S, bins=time_bins, info=False, extra_info=False, mask=central_sensor_area_cuts,
                 n_DUT=DUTs, show_plot=show_plot, savefig=SAVE, savefig_details=f' {S} central area', savefig_path=dir_path, fmt='png')
-        ### efficiency projection whole sensor (zooomed)
-        plot(df[S], "1D_Efficiency", batch_object, S, threshold_charge=threshold_charge, transimpedance=my_transimpedance, geometry_cut='normal', use=use_for_geometry_cut, zoom_to_sensor=True, efficiency_lim=eff_lim,
+        ### efficiency projection whole sensor (zooomed)                                                                                          #### mask should override "use=", but I leave it anyways
+        plot(df[S], "1D_Efficiency", batch_object, S, threshold_charge=threshold_charge, transimpedance=my_transimpedance, geometry_cut='normal', mask=pulse_or_time_mask, use=use_for_geometry_cut, zoom_to_sensor=True, efficiency_lim=eff_lim,
             bins=these_bins, bins_find_min=binning_method, n_DUT=DUTs, show_plot=show_plot, savefig=SAVE, savefig_details=f' {S} threshold charge {threshold_charge}fC', savefig_path=dir_path)
         ### with time cut in the center (zoomed)
-        plot(df[S], "1D_Efficiency", batch_object, S, threshold_charge=threshold_charge, transimpedance=my_transimpedance, geometry_cut='center', use=use_for_geometry_cut, mask=time_cuts, zoom_to_sensor=True, efficiency_lim=eff_lim,
+        plot(df[S], "1D_Efficiency", batch_object, S, threshold_charge=threshold_charge, transimpedance=my_transimpedance, geometry_cut='center', mask=time_cuts, use=use_for_geometry_cut, zoom_to_sensor=True, efficiency_lim=eff_lim,
             bins=these_bins, bins_find_min=binning_method, n_DUT=DUTs, show_plot=show_plot, savefig=SAVE, savefig_details=f' {S} threshold charge {threshold_charge}fC (center and time cut)', savefig_path=dir_path)
         ### 2D efficiency
-        plot(df[S], "2D_Efficiency", batch_object, S, threshold_charge=threshold_charge, transimpedance=my_transimpedance, geometry_cut='normal', use=use_for_geometry_cut, zoom_to_sensor=True,
+        plot(df[S], "2D_Efficiency", batch_object, S, threshold_charge=threshold_charge, transimpedance=my_transimpedance, geometry_cut='normal', mask=pulse_or_time_mask, use=use_for_geometry_cut, zoom_to_sensor=True,
             bins=these_bins, bins_find_min=binning_method, n_DUT=DUTs, show_plot=show_plot, savefig=SAVE, savefig_details=f' {S} thresh charge {threshold_charge}fC', savefig_path=dir_path, fmt='png')
         ### with time cut and zoomed
-        plot(df[S], "2D_Efficiency", batch_object, S, threshold_charge=threshold_charge, transimpedance=my_transimpedance, geometry_cut='normal', use=use_for_geometry_cut, mask=time_cuts, zoom_to_sensor=True,
+        plot(df[S], "2D_Efficiency", batch_object, S, threshold_charge=threshold_charge, transimpedance=my_transimpedance, geometry_cut='normal', mask=time_cuts, use=use_for_geometry_cut, zoom_to_sensor=True,
             bins=these_bins, bins_find_min=binning_method, n_DUT=DUTs, show_plot=show_plot, savefig=SAVE, savefig_details=f' {S} thresh charge {threshold_charge}fC (center and time cut)', savefig_path=dir_path, fmt='png')    
         # plt.close('all')
 
@@ -173,16 +206,20 @@ def analysis_batch(this_batch, batch_object, S, n_DUT=None, CFD_comparison=False
     if CFD_comparison:
         CFD_values = (20, 50, 70)
     ### CFD values comparison with normal geo cuts
-        CFD_mask = [np.logical_and(time_fit_cuts[dut-1], geo_cuts[dut-1]) if dut in DUTs else None for dut in [1,2,3]]
+    ### the time_fit_cuts mask is wrong because it is a different CFD value
+        # CFD_mask = [np.logical_and(combined_cuts[dut-1], geo_cuts[dut-1]) if dut in DUTs else None for dut in [1,2,3]]
+        CFD_mask = [combined_cuts[dut-1] if dut in DUTs else None for dut in [1,2,3]]   ### geo_cuts already in combined_cuts
+
         for dut in DUTs:
-            fig, _ = plot(df[S], 'CFD_comparison', batch_object, S, n_DUT=dut, CFD_values=CFD_values, mask=CFD_mask, time_bins=time_bins_fine, show_plot=show_plot, title='',
-                    savefig=SAVE, savefig_path=dir_path, savefig_details=f" geo cuts",fmt='png')
+            fig, _ = plot(df[S], 'CFD_comparison', batch_object, S, n_DUT=dut, CFD_values=CFD_values, mask=combined_cuts, time_bins=time_bins_fine, show_plot=show_plot, use=use_for_geometry_cut,
+                    savefig=SAVE, savefig_path=dir_path, savefig_details=f" geo cuts", title='', fmt='png')
             plt.close(fig)
+
     ### CFD values comparison with central area cuts (less statistics)
-        CFD_mask = [np.logical_and(time_fit_cuts[dut-1], central_sensor_area_cuts[dut-1]) if dut in DUTs else None for dut in [1,2,3]]
+        CFD_mask = [np.logical_and(combined_cuts[dut-1], central_sensor_area_cuts[dut-1]) if dut in DUTs else None for dut in [1,2,3]]
         for dut in DUTs:
-            fig, _ = plot(df[S], 'CFD_comparison', batch_object, S, n_DUT=dut, CFD_values=CFD_values, mask=CFD_mask, time_bins=time_bins_fine, show_plot=show_plot,
-                    savefig=SAVE, savefig_path=dir_path, savefig_details=f" central area cuts",fmt='png')
+            fig, _ = plot(df[S], 'CFD_comparison', batch_object, S, n_DUT=dut, CFD_values=CFD_values, mask=CFD_mask, time_bins=time_bins_fine, show_plot=show_plot, use=use_for_geometry_cut,
+                    savefig=SAVE, savefig_path=dir_path, savefig_details=f" central area cuts", fmt='png')
             plt.close(fig)
 
     try:
@@ -194,78 +231,77 @@ def analysis_batch(this_batch, batch_object, S, n_DUT=None, CFD_comparison=False
     except Exception as e:
         logging.error(f"In analysis_batch(), unknow error: {e}")
 
-    if new_results:
-        for dut in DUTs:
-            ch = f'Ch{dut+1}'
-            results_dictionary[dut]['name'] = batch_object.S[S].get_sensor(ch).name
-            results_dictionary[dut]['board'] = batch_object.S[S].get_sensor(ch).board
-            results_dictionary[dut]['voltage'] = batch_object.S[S].get_sensor(ch).voltage
-            results_dictionary[dut]['current'] = batch_object.S[S].get_sensor(ch).current
-            results_dictionary[dut]['fluence'] = batch_object.S[S].get_sensor(ch).fluence
-            results_dictionary[dut]['MCP_voltage'] = batch_object.S[S].get_sensor('Ch1').voltage
-            MCP_voltage = batch_object.S[S].get_sensor('Ch1').voltage
-            results_dictionary[dut]['temp_A'] = batch_object.S[S].tempA
-            results_dictionary[dut]['temp_B'] = batch_object.S[S].tempB
-            results_dictionary[dut]['angle'] = batch_object.angle
-            results_dictionary[dut]['humidity'] = batch_object.humidity
-            results_dictionary[dut]['temperature'] = batch_object.temperature
-            try:
-                charge_fit_file = f"charge_fit_results_{this_batch}_{S}_{dut}.csv"
-                charge_fit_df = pd.read_csv(os.path.join(ROOT_fit_dir,"Charge_fit_results",charge_fit_file), skiprows=1)
-                results_dictionary[dut]['charge'] = charge_fit_df["MPV"].iloc[0]
-                results_dictionary[dut]['charge_error'] = charge_fit_df["MPV_error"].iloc[0]
-                
-            except FileNotFoundError:
-                logging.error("in analysis_batch(), charge file not found")
-                results_dictionary[dut]['charge'], results_dictionary[dut]['charge_error'] = -1, 0
-                results_dictionary[dut]['comments'].add("Charge fit file not found")
-            except Exception as e:
-                logging.errorf(f"in analysis_batch(), raised error {e} when loading charge fit")
-                results_dictionary[dut]['charge'], results_dictionary[dut]['charge_error'] = -1, 0
-                results_dictionary[dut]['comments'].add("Charge fit error")
-                ### read the results from the file
-            match MCP_voltage:  ### matche the MCP voltage to its time resolution
-                case 2500: 
-                    MCP_resolution, MCP_error = 36.52, 0.81  # 36.52 +/- 0.81 ps
-                case 2600: 
-                    MCP_resolution, MCP_error = 16.48, 0.57  # 16.48 +/- 0.57 ps
-                case 2800: 
-                    MCP_resolution, MCP_error = 3.73, 1.33   # 3.73 +/- 1.33 ps
-                case other: logging.error(f"in analysis_batch(), incorrect MCP voltage: {other}")
-            try:
-                ### for all sensors that are irradiated set CFD for the DUT to 70%
-                if results_dictionary[dut]['fluence'] != 0:         CFD_DUT = 70
-                elif results_dictionary[dut]['fluence'] == 0:       CFD_DUT = 20
-                else:        logging.error(f"Value of fluence not recognized:{results_dictionary[dut]['fluence']}, unable to set CFD value")
-                ### option to make the geometrical cut be only the central 0.5xo.5mm^2 OR the full surface of the dut
-                if only_center: 
-                    this_mask = np.logical_and(central_sensor_area_cuts[dut-1], time_fit_cuts[dut-1])
-                else:
-                    this_mask = np.logical_and(geo_cuts[dut-1],time_fit_cuts[dut-1])
-
-                time_dict = time_mask(df[S], dut, bins=100, n_bootstrap=n_bootstrap, do_plots=show_plot, mask=this_mask, CFD_DUT=CFD_DUT,
-                                    title_info=' center cut', savefig=os.path.join(dir_path,f'time_plot_with_center_cuts_{S}_{this_batch}_DUT{dut}.png'))[1]
-                time_resolution, time_res_err = error_propagation(time_dict['parameters'][2], time_dict['parameters_errors'][2], MCP_resolution, MCP_error)
-            except Exception as e:
-                logging.error(f"in analysis_batch(), Time fit error: {e}")
-                results_dictionary[dut]['comments'].add(f"Time fit error ({e})")
-                time_resolution, time_res_err = 0, 0
+    for dut in DUTs:
+        ch = f'Ch{dut+1}'
+        results_dictionary[dut]['name'] = batch_object.S[S].get_sensor(ch).name
+        results_dictionary[dut]['board'] = batch_object.S[S].get_sensor(ch).board
+        results_dictionary[dut]['voltage'] = batch_object.S[S].get_sensor(ch).voltage
+        results_dictionary[dut]['current'] = batch_object.S[S].get_sensor(ch).current
+        results_dictionary[dut]['fluence'] = batch_object.S[S].get_sensor(ch).fluence
+        results_dictionary[dut]['MCP_voltage'] = batch_object.S[S].get_sensor('Ch1').voltage
+        MCP_voltage = batch_object.S[S].get_sensor('Ch1').voltage
+        results_dictionary[dut]['temp_A'] = batch_object.S[S].tempA
+        results_dictionary[dut]['temp_B'] = batch_object.S[S].tempB
+        results_dictionary[dut]['angle'] = batch_object.angle
+        results_dictionary[dut]['humidity'] = batch_object.humidity
+        results_dictionary[dut]['temperature'] = batch_object.temperature
+        try:
+            charge_fit_file = f"charge_fit_results_{this_batch}_{S}_{dut}.csv"
+            charge_fit_df = pd.read_csv(os.path.join(ROOT_fit_dir,"Charge_fit_results",charge_fit_file), skiprows=1)
+            results_dictionary[dut]['charge'] = charge_fit_df["MPV"].iloc[0]
+            results_dictionary[dut]['charge_error'] = charge_fit_df["MPV_error"].iloc[0]
             
-            results_dictionary[dut]['time_resolution'], results_dictionary[dut]['time_res_err'] = time_resolution, time_res_err
-            logging.info(f"in analysis_batch(), Time resolution: {time_resolution:.2f}ps +/- {time_res_err:.2f}ps, (MCP: {MCP_resolution}ps)")
-            ### efficiency only calculated with center and time cuts
-            results_dictionary[dut]['efficiency'],_ = efficiency_error(df[S][f"charge_{dut}"].loc[np.logical_and(central_sensor_area_cuts[dut-1],time_cuts[dut-1])], threshold=threshold_charge)
-    else:
-        logging.info("In analysis_batch(), loading existing data and NOT calculating new results")
+        except FileNotFoundError:
+            logging.error("in analysis_batch(), charge file not found")
+            results_dictionary[dut]['charge'], results_dictionary[dut]['charge_error'] = -1, 0
+            results_dictionary[dut]['comments'].add("Charge fit file not found")
+        except Exception as e:
+            logging.errorf(f"in analysis_batch(), raised error {e} when loading charge fit")
+            results_dictionary[dut]['charge'], results_dictionary[dut]['charge_error'] = -1, 0
+            results_dictionary[dut]['comments'].add("Charge fit error")
+            ### read the results from the file
+        match MCP_voltage:  ### matche the MCP voltage to its time resolution
+            case 2500: 
+                MCP_resolution, MCP_error = 36.52, 0.81  # 36.52 +/- 0.81 ps
+            case 2600: 
+                MCP_resolution, MCP_error = 16.48, 0.57  # 16.48 +/- 0.57 ps
+            case 2800: 
+                MCP_resolution, MCP_error = 3.73, 1.33   # 3.73 +/- 1.33 ps
+            case other: logging.error(f"in analysis_batch(), incorrect MCP voltage: {other}")
+        try:
+            ### for all sensors that are irradiated set CFD for the DUT to 70%
+            if results_dictionary[dut]['fluence'] != 0:         CFD_DUT = 70
+            elif results_dictionary[dut]['fluence'] == 0:       CFD_DUT = 20
+            else:        logging.error(f"Value of fluence not recognized:{results_dictionary[dut]['fluence']}, unable to set CFD value")
+            ### option to make the geometrical cut be only the central 0.5xo.5mm^2 OR the full surface of the dut
+            if only_center: 
+                this_mask = np.logical_and(np.logical_and(central_sensor_area_cuts[dut-1], combined_cuts[dut-1]), time_cuts[dut-1])
+            else:
+                this_mask = np.logical_and(combined_cuts[dut-1], time_cuts[dut-1])  ### central_sensor_area_is_smaller than geo_cuts 
 
+            time_dict = time_mask(df[S], dut, bins=time_bins_fine, n_bootstrap=n_bootstrap, do_plots=do_plots, mask=this_mask, CFD_DUT=CFD_DUT,
+                                title_info=' center cut', savefig=os.path.join(dir_path,f'time_plot_with_center_cuts_{S}_{this_batch}_DUT{dut}.png'))[1]
+            time_resolution, time_res_err = error_propagation(time_dict['parameters'][2], time_dict['parameters_errors'][2], MCP_resolution, MCP_error)
+        except Exception as e:
+            logging.error(f"in analysis_batch(), Time fit error: {e}")
+            results_dictionary[dut]['comments'].add(f"Time fit error ({e})")
+            time_resolution, time_res_err = 0, 0
+        
+        results_dictionary[dut]['time_resolution'], results_dictionary[dut]['time_res_err'] = time_resolution, time_res_err
+        logging.info(f"in analysis_batch(), Time resolution: {time_resolution:.2f}ps +/- {time_res_err:.2f}ps, (MCP: {MCP_resolution}ps)")
+        ### efficiency only calculated with center and time cuts
+        results_dictionary[dut]['efficiency'],_ = efficiency_error(df[S][f"charge_{dut}"].loc[np.logical_and(central_sensor_area_cuts[dut-1], time_cuts[dut-1])], threshold=threshold_charge)
     
-    with open(os.path.join(results_path, results_name), 'wb') as f:
-        pickle.dump(results_dictionary, f)
-    logging.info(f"in analysis_batch")
+    if new_results:
+        with open(os.path.join(results_path, results_name), 'wb') as f:
+            pickle.dump(results_dictionary, f)
+        logging.info(f"in analysis_batch, saved new results")
+    else:
+        logging.info("In analysis_batch(), NOT saving new results")
+
     stop = time.time()
 
     print(f"TOTAL TIME: {(stop-start)//60:.0f} min and {(stop-start)%60:.2f} sec")
-
     
     if return_results:
         return results_dictionary
