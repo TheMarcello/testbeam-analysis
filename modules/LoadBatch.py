@@ -389,7 +389,7 @@ def error_propagation(time_difference, time_difference_error, MCP_resolution, MC
     """
     if time_difference**2 < MCP_resolution**2:
         logging.error(f"Invalid values of either Delta_t or MCP resolution: {time_difference} and {MCP_resolution}")
-        return -1, -1
+        raise ValueError("Invalid values of either Delta_t or MCP resolution")
     z = np.sqrt(time_difference**2 - MCP_resolution**2)
     z_err = np.sqrt((time_difference**2 * time_difference_error**2 + MCP_resolution**2 * MCP_resolution_error**2)) / z
     return z, z_err
@@ -643,7 +643,7 @@ def geometry_mask(df, DUT_number, bins, bins_find_min='rice', mask=None, only_se
     return bool_geometry, {'left_edge':left_edge, 'right_edge':right_edge, 'bottom_edge':bottom_edge, 'top_edge':top_edge}
 
 
-def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None, sigmas=3, CFD_DUT=20, CFD_MCP=50, do_plots=False, savefig=False, title_info='', fig_ax=None):
+def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None, sigmas=3, CFD_DUT=20, CFD_MCP=50, do_plots=False, show_plots=None, savefig=False, title_info='', fig_ax=None):
     """
     Creates a boolean mask using a gaussian+background fit of the time difference between DUT and MCP.
     The fit is done in the time window -20e3 :_: 20e3
@@ -660,6 +660,7 @@ def time_mask(df, DUT_number, bins=10000, n_bootstrap=False, mask=None, p0=None,
     p0:         initial parameters for the gaussian fit (A, mu, sigma, background)
     sigmas:     number of sigmas from the center to include in the time cut window
     do_plots:    boolean, if False: np.histogram is called instead, so that no plot is created
+    show_plot:  not used anymore!
     savefig:    boolean, if not False: the fig is saved at the path 'savefig' (include file name please)
     title_info: additional info to put in the title (e.g. batch number)
 
@@ -832,8 +833,8 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                 axes[i].set_aspect('equal')
                 axes[i].set_xlabel('pixels', fontsize=20)
                 axes[i].set_ylabel('pixels', fontsize=20)
-                secx = axes[i].secondary_xaxis('top', functions=(lambda x: x*PIXEL_SIZE, lambda y: y*PIXEL_SIZE))
-                secy = axes[i].secondary_yaxis('right', functions=(lambda x: x*PIXEL_SIZE, lambda y: y*PIXEL_SIZE))
+                secx = axes[i].secondary_xaxis('top', functions=(lambda x: x*PIXEL_SIZE, lambda y: y/PIXEL_SIZE)) ### I think the second of these two functions is wrong, it should have been the inverse
+                secy = axes[i].secondary_yaxis('right', functions=(lambda x: x*PIXEL_SIZE, lambda y: y/PIXEL_SIZE)) ### so probably: (lambda x: x*PIXEL_SIZE, lambda y: y/PIXEL_SIZE)
                 secx.set_xlabel('mm', fontsize=20)
                 secy.set_ylabel('mm', fontsize=20)
             if title_position is None: title_position = 1.05
@@ -977,8 +978,9 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                     eff, err = efficiency_k_n(events_above_threshold_in_bin, total_events_in_bin)
                     axes[coord_idx,i].plot(bins_centers, eff, label=f"Ch{dut+1}", drawstyle='steps-mid')
                     sigma_coeff = 1
-                    axes[coord_idx,i].errorbar(bins_centers, eff, yerr=sigma_coeff*err, elinewidth=1, markersize=0, linewidth=0, capsize=1.5,
-                                label=f"error: {sigma_coeff}$\sigma$")
+                    error_dict = {'elinewidth':1, 'markersize':0, 'linewidth':0, 'capsize':1.5}
+                    error_dict.update(**kwrd_arg)
+                    axes[coord_idx,i].errorbar(bins_centers, eff, yerr=sigma_coeff*err, label=f"error: {sigma_coeff}$\sigma$", **error_dict)
                     plot_title = f"{XY} axis projection, Ch{dut+1}\n{batch_object.S[this_scope].get_sensor(f'Ch{dut+1}').name}"
                     axes[coord_idx,i].set_title(plot_title, fontsize=20, y=1.05)
                     axes[coord_idx,i].set_xlabel(f"{XY} position (pixels)", fontsize=20)
@@ -1089,8 +1091,10 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
                                         title_info=f'\n CFD DUT:{CFD_DUT}% CFD MCP:{CFD_MCP}%', fig_ax=(fig,ax))[1]
 
                     param, param_err = time_dict['parameters'], time_dict['parameters_errors']
-
-                    time_resolution_table.append(error_propagation(param[2], param_err[2], MCP_resolution, MCP_error))
+                    try:
+                        time_resolution_table.append(error_propagation(param[2], param_err[2], MCP_resolution, MCP_error))
+                    except ValueError:
+                        time_resolution_table.append(-1,0)
                     chi2_table.append(time_dict['chi2_reduced'])
                     ax.set_xlim(xlim)
 
@@ -1126,7 +1130,7 @@ def plot(df, plot_type, batch_object, this_scope, bins=None, bins_find_min='rice
 
 
     if savefig: 
-        file_name = f"{plot_type}_{batch_object.batch_number}{savefig_details}.{fmt}"
+        file_name = f"{plot_type}_{batch_object.batch_number}{savefig_details}_{n_DUT}.{fmt}"
         fig.savefig(os.path.join(savefig_path, file_name), bbox_inches="tight")
     if not show_plot:
         plt.close(fig)

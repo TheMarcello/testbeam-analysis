@@ -120,14 +120,25 @@ def analysis_batch(this_batch, batch_object, S, n_DUT=None, CFD_comparison=False
 
     ### the pulseHeight cut of these batches failed too often
     ### maybe I should define a "my_mask" so I can use the same for the plots, and then I could also make it earlier (when I specify use_for_geometry_cut)
-    if this_batch in [502, 505, 601, 602, 603, 604, 605, 901, 902, 1001, 1002]:
-        use_for_geometry_cut = 'time'
-        pulse_or_time_mask = time_cuts_prelim
-        ### also NOT APPLY a pulseHeight cut if I choose time for geometry cut
-        pulse_cuts = [pd.Series(True, index=df[S].index) if dut in DUTs else None for dut in [1,2,3]]
-    else:
-        use_for_geometry_cut = 'pulseheight'
-        pulse_or_time_mask = pulse_cuts
+    ### I need to be more specific because 602 S1 is not good to use with time cuts
+    if S == 'S1':
+        if this_batch in [502, 505, 901, 902, 1001, 1002]:
+            use_for_geometry_cut = 'time'
+            pulse_or_time_mask = time_cuts_prelim
+            ### also NOT APPLY a pulseHeight cut if I choose time for geometry cut
+            pulse_cuts = [pd.Series(True, index=df[S].index) if dut in DUTs else None for dut in [1,2,3]]
+        else:
+            use_for_geometry_cut = 'pulseheight'
+            pulse_or_time_mask = pulse_cuts
+    if S == 'S2':
+        if this_batch in [502, 505, 601, 602, 603, 604, 605, 901, 902, 1001, 1002]:
+            use_for_geometry_cut = 'time'
+            pulse_or_time_mask = time_cuts_prelim
+            ### also NOT APPLY a pulseHeight cut if I choose time for geometry cut
+            pulse_cuts = [pd.Series(True, index=df[S].index) if dut in DUTs else None for dut in [1,2,3]]
+        else:
+            use_for_geometry_cut = 'pulseheight'
+            pulse_or_time_mask = pulse_cuts
 
     geo_cuts = [geometry_mask(df[S], DUT_number=dut, bins=these_bins, bins_find_min=binning_method, mask=pulse_or_time_mask[dut-1])[0] if dut in DUTs else None for dut in [1,2,3]] ### use='pulseheight'/'time' gets overrided by mask
     central_sensor_area_cuts = [geometry_mask(df[S], DUT_number=dut, bins=these_bins, bins_find_min=binning_method, mask=pulse_or_time_mask[dut-1], only_select='center')[0] if dut in DUTs else None for dut in [1,2,3]]
@@ -198,7 +209,7 @@ def analysis_batch(this_batch, batch_object, S, n_DUT=None, CFD_comparison=False
         plot(df[S], "2D_Efficiency", batch_object, S, threshold_charge=threshold_charge, transimpedance=my_transimpedance, geometry_cut='normal', mask=pulse_or_time_mask, use=use_for_geometry_cut, zoom_to_sensor=True,
             bins=these_bins, bins_find_min=binning_method, n_DUT=DUTs, show_plot=show_plot, savefig=SAVE, savefig_details=f' {S} thresh charge {threshold_charge}fC', savefig_path=dir_path, fmt='png')
         ### with time cut and zoomed
-        plot(df[S], "2D_Efficiency", batch_object, S, threshold_charge=threshold_charge, transimpedance=my_transimpedance, geometry_cut='normal', mask=time_cuts, use=use_for_geometry_cut, zoom_to_sensor=True,
+        plot(df[S], "2D_Efficiency", batch_object, S, threshold_charge=threshold_charge, transimpedance=my_transimpedance, geometry_cut='center', mask=time_cuts, use=use_for_geometry_cut, zoom_to_sensor=True,
             bins=these_bins, bins_find_min=binning_method, n_DUT=DUTs, show_plot=show_plot, savefig=SAVE, savefig_details=f' {S} thresh charge {threshold_charge}fC (center and time cut)', savefig_path=dir_path, fmt='png')    
         # plt.close('all')
 
@@ -245,6 +256,7 @@ def analysis_batch(this_batch, batch_object, S, n_DUT=None, CFD_comparison=False
         results_dictionary[dut]['angle'] = batch_object.angle
         results_dictionary[dut]['humidity'] = batch_object.humidity
         results_dictionary[dut]['temperature'] = batch_object.temperature
+        results_dictionary[dut]['comments'] = set()  ### reset comments
         try:
             charge_fit_file = f"charge_fit_results_{this_batch}_{S}_{dut}.csv"
             charge_fit_df = pd.read_csv(os.path.join(ROOT_fit_dir,"Charge_fit_results",charge_fit_file), skiprows=1)
@@ -282,15 +294,19 @@ def analysis_batch(this_batch, batch_object, S, n_DUT=None, CFD_comparison=False
             time_dict = time_mask(df[S], dut, bins=time_bins_fine, n_bootstrap=n_bootstrap, do_plots=do_plots, mask=this_mask, CFD_DUT=CFD_DUT,
                                 title_info=' center cut', savefig=os.path.join(dir_path,f'time_plot_with_center_cuts_{S}_{this_batch}_DUT{dut}.png'))[1]
             time_resolution, time_res_err = error_propagation(time_dict['parameters'][2], time_dict['parameters_errors'][2], MCP_resolution, MCP_error)
+        except ValueError:
+            logging.error(f"in analysis_batch(), invalid value of time resolution")
+            results_dictionary[dut]['comments'].add(f"Invalid time resolution value")
+            time_resolution, time_res_err = -1, 0
         except Exception as e:
             logging.error(f"in analysis_batch(), Time fit error: {e}")
             results_dictionary[dut]['comments'].add(f"Time fit error ({e})")
-            time_resolution, time_res_err = 0, 0
+            time_resolution, time_res_err = -1, 0
         
         results_dictionary[dut]['time_resolution'], results_dictionary[dut]['time_res_err'] = time_resolution, time_res_err
         logging.info(f"in analysis_batch(), Time resolution: {time_resolution:.2f}ps +/- {time_res_err:.2f}ps, (MCP: {MCP_resolution}ps)")
         ### efficiency only calculated with center and time cuts
-        results_dictionary[dut]['efficiency'],_ = efficiency_error(df[S][f"charge_{dut}"].loc[np.logical_and(central_sensor_area_cuts[dut-1], time_cuts[dut-1])], threshold=threshold_charge)
+        results_dictionary[dut]['efficiency'],_ = efficiency_error(df[S][f"charge_{dut}"].loc[np.logical_and(central_sensor_area_cuts[dut-1], time_cuts[dut-1])]/my_transimpedance, threshold=threshold_charge)
     
     if new_results:
         with open(os.path.join(results_path, results_name), 'wb') as f:
